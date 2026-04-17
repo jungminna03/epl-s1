@@ -22,3 +22,14 @@ body {
 .signage-hide-scrollbar {
   scrollbar-width: none;
 }
+
+/* Signage animations */
+@keyframes livePulse {
+  0%, 100% { box-shadow: 0 0 12px rgba(34,211,238,0.6); }
+  50% { box-shadow: 0 0 24px rgba(34,211,238,0.9); }
+}
+
+@keyframes progressFill {
+  from { width: 0; }
+  to { width: 100%; }
+}

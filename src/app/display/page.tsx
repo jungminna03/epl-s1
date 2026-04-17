@@ -1,29 +1,25 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import Image from "next/image";
 import { AnimatePresence, motion } from "framer-motion";
 import { db, asCategory, type Notice } from "@/lib/instant";
 import {
   CATEGORY_STYLES,
-  formatAbsolute,
   formatRelative,
   isNoticeVisible,
+  type CategoryStyle,
 } from "@/lib/categories";
 
-/**
- * /display
- *
- * 복도 디스플레이 전용. InstantDB 를 실시간 구독하여
- * 공지가 추가/수정/삭제될 때 Framer Motion 으로 부드럽게 반영한다.
- *
- * 레이아웃: 상단 "긴급" 핀 영역 + 하단 일반/휴강 카드 그리드 (하이브리드).
- */
+const CYCLE_MS = 5_000;
+const PAGE_SIZE = 4;
+
 export default function DisplayPage() {
   const { isLoading, error, data } = db.useQuery({
     notices: { $: { order: { createdAt: "desc" } } },
   });
 
-  const [now, setNow] = useState<number>(() => Date.now());
+  const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 30_000);
     return () => clearInterval(id);
@@ -31,215 +27,361 @@ export default function DisplayPage() {
 
   if (isLoading) {
     return (
-      <main className="flex min-h-screen items-center justify-center">
-        <div className="flex items-center gap-3 text-zinc-500">
-          <span className="size-2 animate-pulse rounded-full bg-zinc-500" />
+      <div className="flex h-screen items-center justify-center bg-[#0f1219]">
+        <div className="flex items-center gap-3 text-slate-500">
+          <span className="size-2 animate-pulse rounded-full bg-slate-500" />
           공지사항을 불러오는 중…
         </div>
-      </main>
+      </div>
     );
   }
 
   if (error) {
     return (
-      <main className="flex min-h-screen items-center justify-center px-6">
-        <div className="max-w-md rounded-2xl border border-red-500/30 bg-red-500/10 px-6 py-5 text-red-200">
+      <div className="flex h-screen items-center justify-center bg-[#0f1219] px-6">
+        <div className="max-w-md rounded-2xl border border-red-400/30 bg-red-400/10 px-6 py-5 text-red-200">
           <p className="text-sm font-medium">데이터를 불러오지 못했습니다.</p>
           <p className="mt-1 text-xs text-red-300/80">{error.message}</p>
         </div>
-      </main>
+      </div>
     );
   }
 
-  const allNotices = data.notices ?? [];
-  const notices = allNotices.filter((n) => isNoticeVisible(n, now));
-  const urgent = notices.filter((n) => asCategory(n.category) === "긴급");
-  const others = notices.filter((n) => asCategory(n.category) !== "긴급");
+  const allNotices = (data.notices ?? []).filter((n) => isNoticeVisible(n, now));
+
+  return <SignageLayout notices={allNotices} now={now} />;
+}
+
+/* ─── Layout ─── */
+
+function SignageLayout({ notices, now }: { notices: Notice[]; now: number }) {
+  const [currentIdx, setCurrentIdx] = useState(0);
+  const [pageOffset, setPageOffset] = useState(0);
+  const cycleTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Current page of notices (max 4)
+  const pageNotices = notices.slice(pageOffset, pageOffset + PAGE_SIZE);
+  const selected = pageNotices[currentIdx] ?? pageNotices[0] ?? null;
+  const style = selected ? CATEGORY_STYLES[asCategory(selected.category)] : null;
+
+  const advance = useCallback(() => {
+    if (pageNotices.length === 0) return;
+    setCurrentIdx((prev) => {
+      const next = prev + 1;
+      if (next >= pageNotices.length) {
+        // Move to next page or wrap
+        const nextPageOffset = pageOffset + PAGE_SIZE;
+        if (nextPageOffset < notices.length) {
+          setPageOffset(nextPageOffset);
+        } else {
+          setPageOffset(0);
+        }
+        return 0;
+      }
+      return next;
+    });
+  }, [pageNotices.length, pageOffset, notices.length]);
+
+  const resetCycle = useCallback(() => {
+    if (cycleTimer.current) clearInterval(cycleTimer.current);
+    cycleTimer.current = setInterval(advance, CYCLE_MS);
+  }, [advance]);
+
+  useEffect(() => {
+    resetCycle();
+    return () => {
+      if (cycleTimer.current) clearInterval(cycleTimer.current);
+    };
+  }, [resetCycle]);
+
+  // Reset index when notices change
+  useEffect(() => {
+    setCurrentIdx(0);
+    setPageOffset(0);
+  }, [notices.length]);
+
+  const handleSelect = (idx: number) => {
+    setCurrentIdx(idx);
+    resetCycle();
+  };
 
   return (
-    <main className="signage-hide-scrollbar min-h-screen overflow-y-auto">
-      <DisplayHeader now={now} count={notices.length} />
-
-      <div className="mx-auto w-full max-w-7xl px-8 pb-16">
-        <UrgentSection notices={urgent} now={now} />
-        <GridSection notices={others} now={now} />
-        {notices.length === 0 ? <EmptyState /> : null}
-      </div>
-    </main>
+    <div className="grid h-screen grid-cols-[40%_60%] grid-rows-[auto_1fr] overflow-hidden bg-[#0f1219]">
+      <TopBar now={now} />
+      <DetailPanel notice={selected} style={style} now={now} />
+      <ListPanel
+        notices={pageNotices}
+        currentIdx={currentIdx}
+        onSelect={handleSelect}
+        now={now}
+      />
+    </div>
   );
 }
 
-function DisplayHeader({ now, count }: { now: number; count: number }) {
+/* ─── Top Bar ─── */
+
+function TopBar({ now }: { now: number }) {
   const d = new Date(now);
   const date = `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일`;
+  const weekday = ["일", "월", "화", "수", "목", "금", "토"][d.getDay()];
   const time = `${String(d.getHours()).padStart(2, "0")}:${String(
     d.getMinutes(),
   ).padStart(2, "0")}`;
-  const weekday = ["일", "월", "화", "수", "목", "금", "토"][d.getDay()];
 
   return (
-    <header className="sticky top-0 z-10 border-b border-white/5 bg-zinc-950/80 backdrop-blur-md">
-      <div className="mx-auto flex w-full max-w-7xl items-center justify-between px-8 py-6">
-        <div className="flex items-center gap-4">
-          <div className="size-2.5 animate-pulse rounded-full bg-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.8)]" />
-          <div>
-            <p className="text-xs uppercase tracking-[0.32em] text-zinc-500">
-              Campus Notice
-            </p>
-            <h1 className="mt-1 text-2xl font-semibold tracking-tight text-zinc-50">
-              실시간 공지사항
-            </h1>
-          </div>
+    <header className="col-span-2 flex items-center justify-between border-b px-12 py-5" style={{ borderColor: "rgba(34,211,238,0.06)" }}>
+      <div className="flex items-center gap-3.5">
+        <Image
+          src="/logo.png"
+          alt="학과 로고"
+          width={32}
+          height={32}
+          className="invert"
+        />
+        <div
+          className="size-3 rounded-full bg-cyan-400"
+          style={{
+            boxShadow: "0 0 12px rgba(34,211,238,0.6)",
+            animation: "livePulse 2s ease-in-out infinite",
+          }}
+        />
+        <span className="text-xl font-extrabold text-slate-50 tracking-tight">
+          게임소프트웨어학과 공지사항
+        </span>
+      </div>
+      <div className="flex items-baseline gap-4">
+        <div className="text-right text-sm text-slate-600 leading-snug">
+          {date}
+          <br />
+          {weekday}요일
         </div>
-        <div className="text-right">
-          <p className="text-xs text-zinc-500">
-            {date} ({weekday}) · 등록된 공지 {count}건
-          </p>
-          <p className="font-mono text-3xl font-medium tabular-nums text-zinc-100">
-            {time}
-          </p>
-        </div>
+        <span
+          className="text-[44px] font-extrabold text-slate-50 leading-none tracking-tighter"
+          style={{ fontVariantNumeric: "tabular-nums" }}
+        >
+          {time}
+        </span>
       </div>
     </header>
   );
 }
 
-function UrgentSection({ notices, now }: { notices: Notice[]; now: number }) {
-  if (notices.length === 0) return null;
+/* ─── Detail Panel (Left 40%) ─── */
 
-  return (
-    <section className="pt-8">
-      <SectionLabel color="text-red-400" label="긴급 공지" />
-      <div className="mt-4 grid gap-4 lg:grid-cols-2">
-        <AnimatePresence mode="popLayout">
-          {notices.map((n) => (
-            <UrgentCard key={n.id} notice={n} now={now} />
-          ))}
-        </AnimatePresence>
+function DetailPanel({
+  notice,
+  style,
+  now,
+}: {
+  notice: Notice | null;
+  style: CategoryStyle | null;
+  now: number;
+}) {
+  if (!notice || !style) {
+    return (
+      <div className="flex items-center justify-center border-r p-12" style={{ borderColor: "rgba(34,211,238,0.04)" }}>
+        <p className="text-lg text-slate-600">등록된 공지가 없습니다</p>
       </div>
-    </section>
-  );
-}
-
-function GridSection({ notices, now }: { notices: Notice[]; now: number }) {
-  if (notices.length === 0) return null;
+    );
+  }
 
   return (
-    <section className="pt-10">
-      <SectionLabel color="text-zinc-400" label="공지 / 휴강" />
-      <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <AnimatePresence mode="popLayout">
-          {notices.map((n) => (
-            <NoticeCard key={n.id} notice={n} now={now} />
-          ))}
-        </AnimatePresence>
-      </div>
-    </section>
-  );
-}
+    <div
+      className="relative flex flex-col justify-center overflow-hidden border-r p-12"
+      style={{ borderColor: "rgba(34,211,238,0.04)" }}
+    >
+      {/* Ambient glow */}
+      <div
+        className="pointer-events-none absolute -left-[30%] -top-[30%] h-[160%] w-[160%] opacity-60"
+        style={{ background: style.glowGradient }}
+      />
 
-function SectionLabel({ color, label }: { color: string; label: string }) {
-  return (
-    <div className="flex items-center gap-3">
-      <span className={`text-xs font-semibold uppercase tracking-[0.28em] ${color}`}>
-        {label}
-      </span>
-      <span className="h-px flex-1 bg-gradient-to-r from-white/10 to-transparent" />
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={notice.id}
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -8 }}
+          transition={{ duration: 0.45, ease: "easeOut" }}
+          className="relative z-10"
+        >
+          <span
+            className={`inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1 text-sm font-bold ${style.badge}`}
+          >
+            {style.label}
+          </span>
+
+          <h2
+            className="mt-5 font-extrabold text-slate-50 leading-[1.3]"
+            style={{ fontSize: 36, letterSpacing: "-0.8px" }}
+          >
+            {notice.title}
+          </h2>
+
+          <p className="mt-4 whitespace-pre-line text-lg leading-[1.7] text-slate-400">
+            {notice.content}
+          </p>
+
+          <div className="mt-6 flex items-center gap-2 text-[15px] text-slate-600">
+            <span>{notice.professor}</span>
+            <span className="size-1 rounded-full bg-slate-600" />
+            <span>{formatRelative(notice.createdAt, now)}</span>
+          </div>
+        </motion.div>
+      </AnimatePresence>
     </div>
   );
 }
 
-function UrgentCard({ notice, now }: { notice: Notice; now: number }) {
-  const cat = asCategory(notice.category);
-  const s = CATEGORY_STYLES[cat];
-  return (
-    <motion.article
-      layout
-      initial={{ opacity: 0, y: 16, scale: 0.98 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.96, transition: { duration: 0.2 } }}
-      transition={{ type: "spring", stiffness: 260, damping: 26 }}
-      className={`relative overflow-hidden rounded-3xl border border-red-500/25 bg-gradient-to-br from-red-500/10 via-zinc-900 to-zinc-900 p-6 ${s.ring}`}
-    >
-      <div className="absolute inset-y-0 left-0 w-1 bg-red-500" />
-      <div className="flex items-start justify-between gap-4">
-        <Badge style={s} />
-        <span className="text-xs text-zinc-500" title={formatAbsolute(notice.createdAt)}>
-          {formatRelative(notice.createdAt, now)}
-        </span>
-      </div>
-      <h2 className="mt-4 text-2xl font-semibold leading-snug text-zinc-50">
-        {notice.title}
-      </h2>
-      <p className="mt-3 line-clamp-4 whitespace-pre-line text-[15px] leading-relaxed text-zinc-300">
-        {notice.content}
-      </p>
-      <p className="mt-5 text-xs text-zinc-500">
-        작성: <span className="text-zinc-300">{notice.professor}</span>
-      </p>
-    </motion.article>
-  );
-}
+/* ─── List Panel (Right 60%) ─── */
 
-function NoticeCard({ notice, now }: { notice: Notice; now: number }) {
-  const cat = asCategory(notice.category);
-  const s = CATEGORY_STYLES[cat];
-  return (
-    <motion.article
-      layout
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -8, transition: { duration: 0.18 } }}
-      transition={{ type: "spring", stiffness: 240, damping: 28 }}
-      className={`group relative flex h-full flex-col overflow-hidden rounded-2xl border border-white/5 bg-zinc-900/60 p-5 backdrop-blur-sm ${s.ring}`}
-    >
-      <div className={`absolute inset-y-0 left-0 w-1 ${s.dot}`} />
-      <div className="flex items-start justify-between gap-3">
-        <Badge style={s} />
-        <span className="text-[11px] text-zinc-500" title={formatAbsolute(notice.createdAt)}>
-          {formatRelative(notice.createdAt, now)}
-        </span>
-      </div>
-      <h3 className="mt-3 line-clamp-2 text-lg font-semibold leading-snug text-zinc-50">
-        {notice.title}
-      </h3>
-      <p className="mt-2 line-clamp-4 flex-1 whitespace-pre-line text-sm leading-relaxed text-zinc-400">
-        {notice.content}
-      </p>
-      <div className="mt-4 flex items-center justify-between border-t border-white/5 pt-3 text-[11px] text-zinc-500">
-        <span>{notice.professor}</span>
-        <span className="font-mono">{formatAbsolute(notice.createdAt)}</span>
-      </div>
-    </motion.article>
-  );
-}
-
-function Badge({
-  style,
+function ListPanel({
+  notices,
+  currentIdx,
+  onSelect,
+  now,
 }: {
-  style: (typeof CATEGORY_STYLES)[keyof typeof CATEGORY_STYLES];
+  notices: Notice[];
+  currentIdx: number;
+  onSelect: (idx: number) => void;
+  now: number;
 }) {
   return (
-    <span
-      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-medium ${style.badge}`}
-    >
-      <span className={`size-1.5 rounded-full ${style.dot}`} />
-      {style.label}
-    </span>
+    <div className="flex flex-col px-8 py-8 pl-8 pr-12">
+      {/* Header */}
+      <div className="mb-4 flex items-center justify-between">
+        <span className="text-sm font-bold uppercase tracking-[2px] text-slate-500">
+          공지 목록
+        </span>
+        <div className="flex items-center gap-1.5">
+          {notices.map((_, i) => (
+            <div
+              key={i}
+              className={`h-1.5 rounded-full transition-all duration-300 ${
+                i === currentIdx
+                  ? "w-[18px] bg-cyan-400 shadow-[0_0_6px_rgba(34,211,238,0.5)]"
+                  : "w-1.5 bg-slate-700"
+              }`}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* Cards */}
+      <div className="flex flex-1 flex-col gap-2.5">
+        <AnimatePresence mode="wait">
+          {notices.map((notice, i) => (
+            <NoticeItem
+              key={notice.id}
+              notice={notice}
+              index={i}
+              isActive={i === currentIdx}
+              onSelect={() => onSelect(i)}
+              now={now}
+            />
+          ))}
+        </AnimatePresence>
+
+        {notices.length === 0 && (
+          <div className="flex flex-1 items-center justify-center rounded-2xl border border-cyan-400/5 bg-[#1a2233]">
+            <p className="text-sm text-slate-500">등록된 공지사항이 없습니다</p>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
-function EmptyState() {
+function NoticeItem({
+  notice,
+  index,
+  isActive,
+  onSelect,
+  now,
+}: {
+  notice: Notice;
+  index: number;
+  isActive: boolean;
+  onSelect: () => void;
+  now: number;
+}) {
+  const cat = asCategory(notice.category);
+  const style = CATEGORY_STYLES[cat];
+
   return (
-    <div className="mt-20 flex flex-col items-center justify-center gap-3 text-center">
-      <div className="rounded-2xl border border-white/5 bg-zinc-900/60 px-8 py-10">
-        <p className="text-sm font-medium text-zinc-300">
-          등록된 공지사항이 없습니다.
+    <motion.div
+      layout
+      initial={{ opacity: 0, x: -20 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{
+        type: "spring",
+        stiffness: 300,
+        damping: 24,
+        delay: index * 0.1,
+      }}
+      onClick={onSelect}
+      className="relative flex flex-1 cursor-pointer items-center gap-5 overflow-hidden rounded-2xl border-2 px-7 transition-colors duration-300"
+      style={{
+        background: isActive ? style.activeBg : "#1a2233",
+        borderColor: isActive ? style.activeBorder : "transparent",
+      }}
+    >
+      {/* Color bar */}
+      <div
+        className="absolute inset-y-0 left-0 rounded-l-2xl transition-all duration-300"
+        style={{
+          width: isActive ? 5 : 4,
+          background: style.color,
+        }}
+      />
+
+      {/* Progress bar */}
+      {isActive && (
+        <div
+          className="absolute bottom-0 left-0 h-0.5 rounded-bl-2xl"
+          style={{
+            background: style.progressColor,
+            animation: `progressFill ${CYCLE_MS}ms linear forwards`,
+          }}
+          key={`progress-${notice.id}-${Date.now()}`}
+        />
+      )}
+
+      {/* Badge */}
+      <span
+        className={`shrink-0 rounded-full border px-3 py-0.5 text-[13px] font-semibold ${style.badge}`}
+      >
+        {style.label}
+      </span>
+
+      {/* Info */}
+      <div className="min-w-0 flex-1">
+        <p
+          className="truncate font-bold leading-snug text-slate-200 transition-colors duration-300"
+          style={{
+            fontSize: 28,
+            letterSpacing: "-0.5px",
+            color: isActive ? "#f8fafc" : undefined,
+          }}
+        >
+          {notice.title}
         </p>
-        <p className="mt-1 text-xs text-zinc-500">
-          관리자 페이지(/admin)에서 첫 공지를 작성해 보세요.
+        <p className="mt-1 text-[13px] text-slate-600">
+          {formatRelative(notice.createdAt, now)} · {notice.professor}
         </p>
       </div>
-    </div>
+
+      {/* Arrow */}
+      <span
+        className="shrink-0 text-lg transition-all duration-300"
+        style={{
+          color: isActive ? "#64748b" : "#334155",
+          transform: isActive ? "translateX(-4px)" : "none",
+        }}
+      >
+        ◂
+      </span>
+    </motion.div>
   );
 }
