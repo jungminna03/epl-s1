@@ -64,3 +64,18 @@ export function formatAbsolute(ts: number): string {
   const mi = String(d.getMinutes()).padStart(2, "0");
   return `${mm}/${dd} ${hh}:${mi}`;
 }
+
+/**
+ * 공지가 현재 게시 기간 내인지 판별.
+ * - startDate 없으면 createdAt 사용
+ * - endDate 없으면 무기한
+ */
+export function isNoticeVisible(
+  notice: { createdAt: number; startDate?: number; endDate?: number },
+  now: number = Date.now(),
+): boolean {
+  const start = notice.startDate ?? notice.createdAt;
+  if (now < start) return false;
+  if (notice.endDate == null) return true;
+  return now <= notice.endDate;
+}

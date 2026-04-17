@@ -12,6 +12,14 @@ const _schema = i.schema({
       professor: i.string(),
       category: i.string(), // '일반' | '휴강' | '긴급'
       createdAt: i.number().indexed(),
+      startDate: i.number().optional(),
+      endDate: i.number().optional(),
+    }),
+    admins: i.entity({
+      name: i.string(),
+      position: i.string(),
+      password: i.string(),
+      createdAt: i.number().indexed(),
     }),
   },
 });
