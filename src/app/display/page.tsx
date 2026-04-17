@@ -11,7 +11,7 @@ import {
 } from "@/lib/categories";
 
 const CYCLE_MS = 5_000;
-const PAGE_SIZE = 4;
+const PAGE_SIZE = 5;
 const CARD_GAP_VH = 1.2; // vh
 
 export default function DisplayPage() {
@@ -99,7 +99,7 @@ function SignageLayout({ notices, now }: { notices: Notice[]; now: number }) {
   );
 
   return (
-    <div className="grid h-screen grid-cols-[40%_60%] grid-rows-[auto_1fr] overflow-hidden bg-[#0f1219]">
+    <div className="grid h-screen grid-cols-[60%_40%] grid-rows-[auto_1fr] overflow-hidden bg-[#0f1219]">
       <TopBar now={now} />
       <DetailPanel notice={selected} style={style} now={now} />
       <ListPanel
@@ -139,8 +139,16 @@ function TopBar({ now }: { now: number }) {
           }}
         />
         <span style={{ fontSize: "1.3vw", letterSpacing: "0.02vw" }}>
-          <span className="font-extrabold text-slate-50">게임소프트웨어학과</span>
-          <span className="font-light text-slate-400" style={{ marginLeft: "0.5vw" }}>공지사항</span>
+          <span
+            className="font-extrabold"
+            style={{
+              background: "linear-gradient(90deg, #22d3ee, #60a5fa, #a78bfa)",
+              WebkitBackgroundClip: "text",
+              WebkitTextFillColor: "transparent",
+              filter: "drop-shadow(0 0 0.8vw rgba(96,165,250,0.4))",
+            }}
+          >게임소프트웨어학과</span>
+          <span className="font-light text-slate-400" style={{ marginLeft: "0.5vw", fontSize: "0.85em" }}>공지사항</span>
         </span>
       </div>
       <div className="flex items-center" style={{ gap: "1vw" }}>
@@ -222,14 +230,12 @@ function DetailPanel({
             {notice.content}
           </p>
 
-          <div
-            className="flex items-center text-slate-600"
-            style={{ fontSize: "0.9vw", marginTop: "2.5vh", gap: "0.5vw" }}
+          <p
+            className="text-slate-600"
+            style={{ fontSize: "0.9vw", marginTop: "2.5vh" }}
           >
-            <span>{notice.professor}</span>
-            <span className="rounded-full bg-slate-600" style={{ width: "0.25vw", height: "0.25vw" }} />
-            <span>{formatRelative(notice.createdAt, now)}</span>
-          </div>
+            {formatRelative(notice.createdAt, now)}
+          </p>
         </motion.div>
       </AnimatePresence>
     </div>
@@ -473,7 +479,7 @@ function NoticeItem({
           {notice.title}
         </p>
         <p className="text-slate-600" style={{ fontSize: "0.8vw", marginTop: "0.3vh" }}>
-          {formatRelative(notice.createdAt, now)} · {notice.professor}
+          {formatRelative(notice.createdAt, now)}
         </p>
       </div>
 
