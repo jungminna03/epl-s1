@@ -138,8 +138,9 @@ function TopBar({ now }: { now: number }) {
             animation: "livePulse 2s ease-in-out infinite",
           }}
         />
-        <span className="font-extrabold text-slate-50 tracking-tight" style={{ fontSize: "1.3vw" }}>
-          게임소프트웨어학과 공지사항
+        <span style={{ fontSize: "1.3vw", letterSpacing: "0.02vw" }}>
+          <span className="font-extrabold text-slate-50">게임소프트웨어학과</span>
+          <span className="font-light text-slate-400" style={{ marginLeft: "0.5vw" }}>공지사항</span>
         </span>
       </div>
       <div className="flex items-center" style={{ gap: "1vw" }}>

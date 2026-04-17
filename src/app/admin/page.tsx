@@ -540,7 +540,8 @@ function Dashboard({ onSignOut }: { onSignOut: () => void }) {
                     onChange={(e) =>
                       setForm((f) => ({ ...f, startDate: e.target.value }))
                     }
-                    className="flex-1 rounded-xl border border-white/10 bg-zinc-950 px-3 py-2.5 text-sm text-zinc-100 outline-none transition focus:border-zinc-500"
+                    onClick={(e) => (e.target as HTMLInputElement).showPicker()}
+                    className="flex-1 cursor-pointer rounded-xl border border-white/10 bg-zinc-950 px-3 py-2.5 text-sm text-zinc-100 outline-none transition hover:border-white/30 focus:border-zinc-500 [&::-webkit-calendar-picker-indicator]:hidden"
                   />
                   <span className="text-xs text-zinc-500">~</span>
                   <input
@@ -549,7 +550,8 @@ function Dashboard({ onSignOut }: { onSignOut: () => void }) {
                     onChange={(e) =>
                       setForm((f) => ({ ...f, endDate: e.target.value }))
                     }
-                    className="flex-1 rounded-xl border border-white/10 bg-zinc-950 px-3 py-2.5 text-sm text-zinc-100 outline-none transition focus:border-zinc-500"
+                    onClick={(e) => (e.target as HTMLInputElement).showPicker()}
+                    className="flex-1 cursor-pointer rounded-xl border border-white/10 bg-zinc-950 px-3 py-2.5 text-sm text-zinc-100 outline-none transition hover:border-white/30 focus:border-zinc-500 [&::-webkit-calendar-picker-indicator]:hidden"
                   />
                 </div>
                 {!form.endDate && (
