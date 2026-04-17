@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import Image from "next/image";
 import { AnimatePresence, motion } from "framer-motion";
 import { db, asCategory, type Notice } from "@/lib/instant";
 import {
@@ -130,15 +129,7 @@ function TopBar({ now }: { now: number }) {
       style={{ borderColor: "rgba(34,211,238,0.06)", padding: "1.5vh 3vw" }}
     >
       <div className="flex items-center" style={{ gap: "1vw" }}>
-        <Image
-          src="/logo.png"
-          alt="학과 로고"
-          width={32}
-          height={32}
-          className="invert"
-          style={{ width: "2vw", height: "2vw" }}
-        />
-        <div
+<div
           className="rounded-full bg-cyan-400"
           style={{
             width: "0.7vw",
