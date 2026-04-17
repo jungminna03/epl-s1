@@ -9,9 +9,10 @@ const _schema = i.schema({
     notices: i.entity({
       title: i.string(),
       content: i.string(),
-      professor: i.string(),
+      professor: i.string().optional(),
       category: i.string(), // '일반' | '휴강' | '긴급'
       createdAt: i.number().indexed(),
+      link: i.string().optional(),
       startDate: i.number().optional(),
       endDate: i.number().optional(),
     }),

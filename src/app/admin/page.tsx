@@ -122,6 +122,7 @@ interface FormState {
   title: string;
   content: string;
   category: Category;
+  link: string;
   startDate: string; // "YYYY-MM-DD"
   endDate: string;   // "" means 무기한
 }
@@ -131,6 +132,7 @@ const EMPTY_FORM: FormState = {
   title: "",
   content: "",
   category: "일반",
+  link: "",
   startDate: new Date().toISOString().slice(0, 10),
   endDate: "",
 };
@@ -152,6 +154,7 @@ function Dashboard({ onSignOut }: { onSignOut: () => void }) {
       title: n.title,
       content: n.content,
       category: asCategory(n.category),
+      link: n.link ?? "",
       startDate: n.startDate ? msToDate(n.startDate) : msToDate(n.createdAt),
       endDate: n.endDate ? msToDate(n.endDate) : "",
     });
@@ -174,6 +177,7 @@ function Dashboard({ onSignOut }: { onSignOut: () => void }) {
             title: form.title.trim(),
             content: form.content.trim(),
             category: form.category,
+            link: form.link.trim() || null,
             startDate: dateToMs(form.startDate),
             endDate: form.endDate ? dateToMs(form.endDate) : null,
           }),
@@ -184,6 +188,7 @@ function Dashboard({ onSignOut }: { onSignOut: () => void }) {
             title: form.title.trim(),
             content: form.content.trim(),
             category: form.category,
+            link: form.link.trim() || null,
             createdAt: Date.now(),
             startDate: dateToMs(form.startDate),
             endDate: form.endDate ? dateToMs(form.endDate) : null,
@@ -316,6 +321,18 @@ function Dashboard({ onSignOut }: { onSignOut: () => void }) {
                   rows={6}
                   placeholder="공지 내용을 입력하세요."
                   className="w-full resize-y rounded-xl border border-white/10 bg-zinc-950 px-3 py-2.5 text-sm leading-relaxed text-zinc-100 outline-none transition focus:border-zinc-500"
+                />
+              </Field>
+
+              <Field label="링크 (선택)">
+                <input
+                  type="url"
+                  value={form.link}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, link: e.target.value }))
+                  }
+                  placeholder="https://example.com"
+                  className="w-full rounded-xl border border-white/10 bg-zinc-950 px-3 py-2.5 text-sm text-zinc-100 outline-none transition focus:border-zinc-500"
                 />
               </Field>
 

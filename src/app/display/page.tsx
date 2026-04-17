@@ -10,7 +10,8 @@ import {
   type CategoryStyle,
 } from "@/lib/categories";
 
-const CYCLE_MS = 5_000;
+const CYCLE_MS = 10_000;
+const TAP_PAUSE_MS = 60_000;
 const PAGE_SIZE = 5;
 const CARD_GAP_VH = 1.2; // vh
 
@@ -56,7 +57,8 @@ export default function DisplayPage() {
 
 function SignageLayout({ notices, now }: { notices: Notice[]; now: number }) {
   const [currentIdx, setCurrentIdx] = useState(0);
-  const cycleTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [cycleDuration, setCycleDuration] = useState(CYCLE_MS);
+  const cycleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const selected = notices[currentIdx] ?? null;
   const style = selected ? CATEGORY_STYLES[asCategory(selected.category)] : null;
@@ -67,14 +69,15 @@ function SignageLayout({ notices, now }: { notices: Notice[]; now: number }) {
   }, [notices.length]);
 
   const resetCycle = useCallback(() => {
-    if (cycleTimer.current) clearInterval(cycleTimer.current);
+    if (cycleTimer.current) clearTimeout(cycleTimer.current);
+    setCycleDuration(CYCLE_MS);
     cycleTimer.current = setInterval(advance, CYCLE_MS);
   }, [advance]);
 
   useEffect(() => {
     resetCycle();
     return () => {
-      if (cycleTimer.current) clearInterval(cycleTimer.current);
+      if (cycleTimer.current) clearTimeout(cycleTimer.current);
     };
   }, [resetCycle]);
 
@@ -84,7 +87,13 @@ function SignageLayout({ notices, now }: { notices: Notice[]; now: number }) {
 
   const handleSelect = (idx: number) => {
     setCurrentIdx(idx);
-    resetCycle();
+    setCycleDuration(TAP_PAUSE_MS);
+    // Pause auto-cycle for 60s, then resume
+    if (cycleTimer.current) clearTimeout(cycleTimer.current);
+    cycleTimer.current = setTimeout(() => {
+      resetCycle();
+      advance();
+    }, TAP_PAUSE_MS);
   };
 
   const handleSwipe = useCallback(
@@ -105,6 +114,7 @@ function SignageLayout({ notices, now }: { notices: Notice[]; now: number }) {
       <ListPanel
         notices={notices}
         currentIdx={currentIdx}
+        cycleDuration={cycleDuration}
         onSelect={handleSelect}
         onSwipe={handleSwipe}
         now={now}
@@ -178,6 +188,17 @@ function DetailPanel({
   style: CategoryStyle | null;
   now: number;
 }) {
+  const [showIframe, setShowIframe] = useState(false);
+  const prevNoticeId = useRef<string | null>(null);
+
+  // 다른 공지 선택 시 iframe 닫기
+  useEffect(() => {
+    if (notice?.id !== prevNoticeId.current) {
+      setShowIframe(false);
+      prevNoticeId.current = notice?.id ?? null;
+    }
+  }, [notice?.id]);
+
   if (!notice || !style) {
     return (
       <div
@@ -189,9 +210,42 @@ function DetailPanel({
     );
   }
 
+  if (showIframe && notice.link) {
+    return (
+      <div
+        className="relative flex flex-col overflow-hidden border-r"
+        style={{ borderColor: "rgba(34,211,238,0.04)" }}
+      >
+        {/* 뒤로가기 바 */}
+        <button
+          onClick={() => setShowIframe(false)}
+          className="flex items-center border-b bg-[#1a2233] text-slate-400 transition-colors hover:text-slate-200"
+          style={{
+            borderColor: "rgba(34,211,238,0.06)",
+            padding: "0.8vh 2vw",
+            gap: "0.5vw",
+            fontSize: "0.85vw",
+          }}
+        >
+          <span style={{ fontSize: "1vw" }}>←</span>
+          공지로 돌아가기
+        </button>
+        <iframe
+          src={notice.link}
+          className="flex-1 bg-white"
+          style={{ border: "none", width: "100%", height: "100%" }}
+        />
+      </div>
+    );
+  }
+
+  const linkDomain = notice.link
+    ? (() => { try { return new URL(notice.link).hostname; } catch { return notice.link; } })()
+    : null;
+
   return (
     <div
-      className="relative flex flex-col justify-center overflow-hidden border-r"
+      className="relative flex flex-col justify-start overflow-y-auto border-r"
       style={{ borderColor: "rgba(34,211,238,0.04)", padding: "3vh 3vw" }}
     >
       {/* Ambient glow */}
@@ -236,6 +290,31 @@ function DetailPanel({
           >
             {formatRelative(notice.createdAt, now)}
           </p>
+
+          {/* 북마크 카드 */}
+          {notice.link && (
+            <button
+              onClick={() => setShowIframe(true)}
+              className="mt-[2vh] flex w-full items-center rounded-[0.6vw] border border-slate-700/60 bg-[#1e293b] transition-all hover:border-cyan-400/30 hover:bg-[#243044]"
+              style={{ padding: "1.2vh 1.2vw", gap: "1vw" }}
+            >
+              <div
+                className="flex shrink-0 items-center justify-center rounded-[0.4vw] bg-slate-700/50"
+                style={{ width: "2.5vw", height: "2.5vw" }}
+              >
+                <span style={{ fontSize: "1.2vw" }}>🔗</span>
+              </div>
+              <div className="min-w-0 flex-1 text-left">
+                <p className="truncate font-semibold text-slate-300" style={{ fontSize: "0.95vw" }}>
+                  관련 링크 열기
+                </p>
+                <p className="truncate text-slate-500" style={{ fontSize: "0.75vw" }}>
+                  {linkDomain}
+                </p>
+              </div>
+              <span className="shrink-0 text-slate-600" style={{ fontSize: "1vw" }}>→</span>
+            </button>
+          )}
         </motion.div>
       </AnimatePresence>
     </div>
@@ -247,12 +326,14 @@ function DetailPanel({
 function ListPanel({
   notices,
   currentIdx,
+  cycleDuration,
   onSelect,
   onSwipe,
   now,
 }: {
   notices: Notice[];
   currentIdx: number;
+  cycleDuration: number;
   onSelect: (idx: number) => void;
   onSwipe: (direction: number) => void;
   now: number;
@@ -373,6 +454,7 @@ function ListPanel({
               notice={notice}
               index={i}
               isActive={i === currentIdx}
+              cycleDuration={cycleDuration}
               onSelect={() => {
                 if (!isDragging.current) onSelect(i);
               }}
@@ -398,6 +480,7 @@ function NoticeItem({
   notice,
   index,
   isActive,
+  cycleDuration,
   onSelect,
   now,
   height,
@@ -405,6 +488,7 @@ function NoticeItem({
   notice: Notice;
   index: number;
   isActive: boolean;
+  cycleDuration: number;
   onSelect: () => void;
   now: number;
   height: number;
@@ -451,7 +535,7 @@ function NoticeItem({
           style={{
             height: "0.2vh",
             background: style.progressColor,
-            animation: `progressFill ${CYCLE_MS}ms linear forwards`,
+            animation: `progressFill ${cycleDuration}ms linear forwards`,
             borderRadius: "0 0 0 1vw",
           }}
           key={`progress-${notice.id}-${Date.now()}`}
