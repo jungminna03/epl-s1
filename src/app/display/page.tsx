@@ -245,8 +245,8 @@ function DetailPanel({
 
   return (
     <div
-      className="relative flex flex-col justify-start overflow-y-auto border-r"
-      style={{ borderColor: "rgba(34,211,238,0.04)", padding: "3vh 3vw" }}
+      className="relative flex min-h-0 flex-col overflow-y-auto border-r"
+      style={{ borderColor: "rgba(34,211,238,0.04)" }}
     >
       {/* Ambient glow */}
       <div
@@ -261,7 +261,8 @@ function DetailPanel({
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -8 }}
           transition={{ duration: 0.45, ease: "easeOut" }}
-          className="relative z-10"
+          className="relative z-10 my-auto"
+          style={{ padding: "3vh 3vw" }}
         >
           <span
             className={`inline-flex items-center rounded-full border font-bold ${style.badge}`}
