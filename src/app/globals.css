@@ -1,0 +1,24 @@
+@import "tailwindcss";
+
+@theme inline {
+  --color-background: #09090b;
+  --color-foreground: #fafafa;
+  --font-sans:
+    "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont,
+    "Apple SD Gothic Neo", "Noto Sans KR", "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+html,
+body {
+  background: var(--color-background);
+  color: var(--color-foreground);
+}
+
+/* 디스플레이 모드용: 디스플레이 페이지에서는 스크롤바를 숨겨 사이니지 느낌을 살린다 */
+.signage-hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.signage-hide-scrollbar {
+  scrollbar-width: none;
+}
