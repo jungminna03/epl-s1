@@ -1,37 +1,61 @@
 import type { Category } from "./instant";
 
-/**
- * 카테고리별 배지/카드 스타일.
- * - dot: 카드 좌측 컬러 점/스트라이프용
- * - badge: 배지 컨테이너 (배경/테두리/텍스트)
- * - ring: 카드 외곽선 강조 (긴급 등)
- * - label: 사람이 읽는 라벨 (한국어)
- */
 export interface CategoryStyle {
   label: string;
+  /** Accent color hex value */
+  color: string;
+  /** Tailwind classes for the left color bar */
   dot: string;
+  /** Tailwind classes for badge container */
   badge: string;
+  /** Tailwind classes for card ring/outline */
   ring: string;
+  /** CSS color for progress bar */
+  progressColor: string;
+  /** CSS background for active card in list */
+  activeBg: string;
+  /** CSS border color for active card */
+  activeBorder: string;
+  /** CSS background for detail panel glow */
+  glowGradient: string;
 }
 
 export const CATEGORY_STYLES: Record<Category, CategoryStyle> = {
   긴급: {
     label: "긴급",
-    dot: "bg-red-500",
-    badge: "bg-red-500/15 text-red-300 border-red-500/40",
-    ring: "ring-1 ring-red-500/40",
+    color: "#f87171",
+    dot: "bg-red-400",
+    badge: "bg-red-400/15 text-red-400 border-red-400/20",
+    ring: "",
+    progressColor: "rgba(248,113,113,0.4)",
+    activeBg: "#1e2030",
+    activeBorder: "rgba(248,113,113,0.15)",
+    glowGradient:
+      "radial-gradient(ellipse at 40% 50%, rgba(248,113,113,0.05) 0%, transparent 55%)",
   },
   휴강: {
     label: "휴강",
-    dot: "bg-amber-500",
-    badge: "bg-amber-500/15 text-amber-300 border-amber-500/40",
-    ring: "ring-1 ring-amber-500/30",
+    color: "#fbbf24",
+    dot: "bg-yellow-400",
+    badge: "bg-yellow-400/10 text-yellow-400 border-yellow-400/15",
+    ring: "",
+    progressColor: "rgba(251,191,36,0.4)",
+    activeBg: "#1e2520",
+    activeBorder: "rgba(251,191,36,0.12)",
+    glowGradient:
+      "radial-gradient(ellipse at 40% 50%, rgba(251,191,36,0.04) 0%, transparent 55%)",
   },
   일반: {
     label: "일반",
-    dot: "bg-sky-500",
-    badge: "bg-sky-500/15 text-sky-300 border-sky-500/40",
-    ring: "ring-1 ring-white/5",
+    color: "#22d3ee",
+    dot: "bg-cyan-400",
+    badge: "bg-cyan-400/10 text-cyan-400 border-cyan-400/15",
+    ring: "",
+    progressColor: "rgba(34,211,238,0.4)",
+    activeBg: "#1e2a3d",
+    activeBorder: "rgba(34,211,238,0.15)",
+    glowGradient:
+      "radial-gradient(ellipse at 40% 50%, rgba(34,211,238,0.04) 0%, transparent 55%)",
   },
 };
 
