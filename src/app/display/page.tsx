@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { db, asCategory, type Notice } from "@/lib/instant";
 import {
   CATEGORY_STYLES,
+  DEFAULT_STYLE,
   formatRelative,
   isNoticeVisible,
   type CategoryStyle,
@@ -61,7 +62,8 @@ function SignageLayout({ notices, now }: { notices: Notice[]; now: number }) {
   const cycleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const selected = notices[currentIdx] ?? null;
-  const style = selected ? CATEGORY_STYLES[asCategory(selected.category)] : null;
+  const selectedCat = selected ? asCategory(selected.category) : null;
+  const style = selected ? (selectedCat ? CATEGORY_STYLES[selectedCat] : DEFAULT_STYLE) : null;
 
   const advance = useCallback(() => {
     if (notices.length === 0) return;
@@ -272,12 +274,14 @@ function DetailPanel({
           className="relative z-10 my-auto"
           style={{ padding: "3vh 3vw" }}
         >
-          <span
-            className={`inline-flex items-center rounded-full border font-bold ${style.badge}`}
-            style={{ fontSize: "0.9vw", padding: "0.3vh 1vw", gap: "0.4vw" }}
-          >
-            {style.label}
-          </span>
+          {style.label && (
+            <span
+              className={`inline-flex items-center rounded-full border font-bold ${style.badge}`}
+              style={{ fontSize: "0.9vw", padding: "0.3vh 1vw", gap: "0.4vw" }}
+            >
+              {style.label}
+            </span>
+          )}
 
           <h2
             className="font-extrabold text-slate-50 leading-[1.3]"
@@ -503,7 +507,7 @@ function NoticeItem({
   height: number;
 }) {
   const cat = asCategory(notice.category);
-  const style = CATEGORY_STYLES[cat];
+  const style = cat ? CATEGORY_STYLES[cat] : DEFAULT_STYLE;
 
   return (
     <motion.div
@@ -552,12 +556,14 @@ function NoticeItem({
       )}
 
       {/* Badge */}
-      <span
-        className={`shrink-0 rounded-full border font-semibold ${style.badge}`}
-        style={{ fontSize: "0.8vw", padding: "0.3vh 0.7vw" }}
-      >
-        {style.label}
-      </span>
+      {style.label && (
+        <span
+          className={`shrink-0 rounded-full border font-semibold ${style.badge}`}
+          style={{ fontSize: "0.8vw", padding: "0.3vh 0.7vw" }}
+        >
+          {style.label}
+        </span>
+      )}
 
       {/* Info */}
       <div className="min-w-0 flex-1">

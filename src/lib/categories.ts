@@ -20,33 +20,23 @@ export interface CategoryStyle {
   glowGradient: string;
 }
 
+/** 태그 미선택 시 사용할 기본 스타일 */
+export const DEFAULT_STYLE: CategoryStyle = {
+  label: "",
+  color: "#64748b",
+  dot: "bg-slate-500",
+  badge: "",
+  ring: "",
+  progressColor: "rgba(100,116,139,0.4)",
+  activeBg: "#1e2a3d",
+  activeBorder: "rgba(100,116,139,0.15)",
+  glowGradient:
+    "radial-gradient(ellipse at 40% 50%, rgba(100,116,139,0.04) 0%, transparent 55%)",
+};
+
 export const CATEGORY_STYLES: Record<Category, CategoryStyle> = {
-  긴급: {
-    label: "긴급",
-    color: "#f87171",
-    dot: "bg-red-400",
-    badge: "bg-red-400/15 text-red-400 border-red-400/20",
-    ring: "",
-    progressColor: "rgba(248,113,113,0.4)",
-    activeBg: "#1e2030",
-    activeBorder: "rgba(248,113,113,0.15)",
-    glowGradient:
-      "radial-gradient(ellipse at 40% 50%, rgba(248,113,113,0.05) 0%, transparent 55%)",
-  },
-  휴강: {
-    label: "휴강",
-    color: "#fbbf24",
-    dot: "bg-yellow-400",
-    badge: "bg-yellow-400/10 text-yellow-400 border-yellow-400/15",
-    ring: "",
-    progressColor: "rgba(251,191,36,0.4)",
-    activeBg: "#1e2520",
-    activeBorder: "rgba(251,191,36,0.12)",
-    glowGradient:
-      "radial-gradient(ellipse at 40% 50%, rgba(251,191,36,0.04) 0%, transparent 55%)",
-  },
-  일반: {
-    label: "일반",
+  "1학년": {
+    label: "1학년",
     color: "#22d3ee",
     dot: "bg-cyan-400",
     badge: "bg-cyan-400/10 text-cyan-400 border-cyan-400/15",
@@ -56,6 +46,42 @@ export const CATEGORY_STYLES: Record<Category, CategoryStyle> = {
     activeBorder: "rgba(34,211,238,0.15)",
     glowGradient:
       "radial-gradient(ellipse at 40% 50%, rgba(34,211,238,0.04) 0%, transparent 55%)",
+  },
+  "2학년": {
+    label: "2학년",
+    color: "#a78bfa",
+    dot: "bg-violet-400",
+    badge: "bg-violet-400/10 text-violet-400 border-violet-400/15",
+    ring: "",
+    progressColor: "rgba(167,139,250,0.4)",
+    activeBg: "#1e2030",
+    activeBorder: "rgba(167,139,250,0.15)",
+    glowGradient:
+      "radial-gradient(ellipse at 40% 50%, rgba(167,139,250,0.04) 0%, transparent 55%)",
+  },
+  "3학년": {
+    label: "3학년",
+    color: "#34d399",
+    dot: "bg-emerald-400",
+    badge: "bg-emerald-400/10 text-emerald-400 border-emerald-400/15",
+    ring: "",
+    progressColor: "rgba(52,211,153,0.4)",
+    activeBg: "#1e2520",
+    activeBorder: "rgba(52,211,153,0.12)",
+    glowGradient:
+      "radial-gradient(ellipse at 40% 50%, rgba(52,211,153,0.04) 0%, transparent 55%)",
+  },
+  "4학년": {
+    label: "4학년",
+    color: "#fb923c",
+    dot: "bg-orange-400",
+    badge: "bg-orange-400/10 text-orange-400 border-orange-400/15",
+    ring: "",
+    progressColor: "rgba(251,146,60,0.4)",
+    activeBg: "#25201e",
+    activeBorder: "rgba(251,146,60,0.15)",
+    glowGradient:
+      "radial-gradient(ellipse at 40% 50%, rgba(251,146,60,0.04) 0%, transparent 55%)",
   },
 };
 

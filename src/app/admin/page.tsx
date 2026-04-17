@@ -10,7 +10,7 @@ import {
   type Category,
   type Notice,
 } from "@/lib/instant";
-import { CATEGORY_STYLES, formatAbsolute } from "@/lib/categories";
+import { CATEGORY_STYLES, DEFAULT_STYLE, formatAbsolute } from "@/lib/categories";
 
 /**
  * /admin
@@ -121,7 +121,7 @@ interface FormState {
   id: string | null; // null 이면 새 공지
   title: string;
   content: string;
-  category: Category;
+  category: Category | "";
   link: string;
   startDate: string; // "YYYY-MM-DD"
   endDate: string;   // "" means 무기한
@@ -131,7 +131,7 @@ const EMPTY_FORM: FormState = {
   id: null,
   title: "",
   content: "",
-  category: "일반",
+  category: "",
   link: "",
   startDate: new Date().toISOString().slice(0, 10),
   endDate: "",
@@ -153,7 +153,7 @@ function Dashboard({ onSignOut }: { onSignOut: () => void }) {
       id: n.id,
       title: n.title,
       content: n.content,
-      category: asCategory(n.category),
+      category: asCategory(n.category) ?? "",
       link: n.link ?? "",
       startDate: n.startDate ? msToDate(n.startDate) : msToDate(n.createdAt),
       endDate: n.endDate ? msToDate(n.endDate) : "",
@@ -176,7 +176,7 @@ function Dashboard({ onSignOut }: { onSignOut: () => void }) {
           db.tx.notices[form.id].update({
             title: form.title.trim(),
             content: form.content.trim(),
-            category: form.category,
+            category: form.category || "",
             link: form.link.trim() || null,
             startDate: dateToMs(form.startDate),
             endDate: form.endDate ? dateToMs(form.endDate) : null,
@@ -187,7 +187,7 @@ function Dashboard({ onSignOut }: { onSignOut: () => void }) {
           db.tx.notices[id()].update({
             title: form.title.trim(),
             content: form.content.trim(),
-            category: form.category,
+            category: form.category || "",
             link: form.link.trim() || null,
             createdAt: Date.now(),
             startDate: dateToMs(form.startDate),
@@ -440,11 +440,11 @@ function CategoryPicker({
   value,
   onChange,
 }: {
-  value: Category;
-  onChange: (c: Category) => void;
+  value: Category | "";
+  onChange: (c: Category | "") => void;
 }) {
   return (
-    <div className="grid grid-cols-3 gap-2">
+    <div className="grid grid-cols-4 gap-2">
       {CATEGORIES.map((c) => {
         const s = CATEGORY_STYLES[c];
         const active = value === c;
@@ -452,7 +452,7 @@ function CategoryPicker({
           <button
             key={c}
             type="button"
-            onClick={() => onChange(c)}
+            onClick={() => onChange(active ? "" : c)}
             className={`rounded-xl border px-3 py-2 text-sm font-medium transition ${
               active
                 ? `${s.badge} border-current`
@@ -480,7 +480,7 @@ function NoticeRow({
   onDelete: () => void;
 }) {
   const cat = asCategory(notice.category);
-  const s = CATEGORY_STYLES[cat];
+  const s = cat ? CATEGORY_STYLES[cat] : DEFAULT_STYLE;
 
   return (
     <motion.li
@@ -499,11 +499,13 @@ function NoticeRow({
       <div className="flex items-start justify-between gap-3 pl-2">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <span
-              className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium ${s.badge}`}
-            >
-              {s.label}
-            </span>
+            {cat && (
+              <span
+                className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium ${s.badge}`}
+              >
+                {s.label}
+              </span>
+            )}
             <span className="text-[11px] text-zinc-500">
               {formatAbsolute(notice.createdAt)}
               {" · "}

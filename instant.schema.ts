@@ -10,7 +10,7 @@ const _schema = i.schema({
       title: i.string(),
       content: i.string(),
       professor: i.string().optional(),
-      category: i.string(), // '일반' | '휴강' | '긴급'
+      category: i.string(), // '' | '1학년' | '2학년' | '3학년' | '4학년'
       createdAt: i.number().indexed(),
       link: i.string().optional(),
       startDate: i.number().optional(),

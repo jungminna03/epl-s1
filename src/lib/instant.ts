@@ -13,7 +13,7 @@ const APP_ID =
 /**
  * 카테고리 리터럴 — DB 는 string 으로 저장하지만 앱 레이어에서 타입으로 좁힌다.
  */
-export const CATEGORIES = ["일반", "휴강", "긴급"] as const;
+export const CATEGORIES = ["1학년", "2학년", "3학년", "4학년"] as const;
 export type Category = (typeof CATEGORIES)[number];
 
 export { schema };
@@ -29,8 +29,8 @@ export type Admin = InstaQLEntity<AppSchema, "admins">;
 /**
  * 런타임에서 카테고리 문자열을 안전하게 좁히는 헬퍼.
  */
-export function asCategory(value: string): Category {
+export function asCategory(value: string): Category | null {
   return (CATEGORIES as readonly string[]).includes(value)
     ? (value as Category)
-    : "일반";
+    : null;
 }
