@@ -33,3 +33,8 @@ body {
   from { width: 0; }
   to { width: 100%; }
 }
+
+/* 개발 모드 오버레이 숨기기 (사이니지용) */
+nextjs-portal {
+  display: none !important;
+}

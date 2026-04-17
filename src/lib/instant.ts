@@ -18,12 +18,13 @@ export type Category = (typeof CATEGORIES)[number];
 
 export { schema };
 
-export const db = init({ appId: APP_ID, schema });
+export const db = init({ appId: APP_ID, schema, devtool: false });
 
 /**
  * 쿼리 결과 1건의 타입.
  */
 export type Notice = InstaQLEntity<AppSchema, "notices">;
+export type Admin = InstaQLEntity<AppSchema, "admins">;
 
 /**
  * 런타임에서 카테고리 문자열을 안전하게 좁히는 헬퍼.
