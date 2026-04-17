@@ -85,15 +85,18 @@ function SignageLayout({ notices, now }: { notices: Notice[]; now: number }) {
     setCurrentIdx(0);
   }, [notices.length]);
 
-  const handleSelect = (idx: number) => {
-    setCurrentIdx(idx);
+  const pauseCycle = useCallback(() => {
     setCycleDuration(TAP_PAUSE_MS);
-    // Pause auto-cycle for 60s, then resume
     if (cycleTimer.current) clearTimeout(cycleTimer.current);
     cycleTimer.current = setTimeout(() => {
       resetCycle();
       advance();
     }, TAP_PAUSE_MS);
+  }, [resetCycle, advance]);
+
+  const handleSelect = (idx: number) => {
+    setCurrentIdx(idx);
+    pauseCycle();
   };
 
   const handleSwipe = useCallback(
@@ -101,16 +104,16 @@ function SignageLayout({ notices, now }: { notices: Notice[]; now: number }) {
       const next = currentIdx + dir;
       if (next >= 0 && next < notices.length) {
         setCurrentIdx(next);
-        resetCycle();
+        pauseCycle();
       }
     },
-    [currentIdx, notices.length, resetCycle],
+    [currentIdx, notices.length, pauseCycle],
   );
 
   return (
     <div className="grid h-screen grid-cols-[60%_40%] grid-rows-[auto_1fr] overflow-hidden bg-[#0f1219]">
       <TopBar now={now} />
-      <DetailPanel notice={selected} style={style} now={now} />
+      <DetailPanel notice={selected} style={style} now={now} onInteraction={pauseCycle} />
       <ListPanel
         notices={notices}
         currentIdx={currentIdx}
@@ -183,10 +186,12 @@ function DetailPanel({
   notice,
   style,
   now,
+  onInteraction,
 }: {
   notice: Notice | null;
   style: CategoryStyle | null;
   now: number;
+  onInteraction: () => void;
 }) {
   const [showIframe, setShowIframe] = useState(false);
   const prevNoticeId = useRef<string | null>(null);
@@ -218,7 +223,7 @@ function DetailPanel({
       >
         {/* 뒤로가기 바 */}
         <button
-          onClick={() => setShowIframe(false)}
+          onClick={() => { setShowIframe(false); onInteraction(); }}
           className="flex items-center border-b bg-[#1a2233] text-slate-400 transition-colors hover:text-slate-200"
           style={{
             borderColor: "rgba(34,211,238,0.06)",
@@ -247,6 +252,9 @@ function DetailPanel({
     <div
       className="relative flex min-h-0 flex-col overflow-y-auto border-r"
       style={{ borderColor: "rgba(34,211,238,0.04)" }}
+      onScroll={onInteraction}
+      onTouchStart={onInteraction}
+      onMouseDown={onInteraction}
     >
       {/* Ambient glow */}
       <div
@@ -295,7 +303,7 @@ function DetailPanel({
           {/* 북마크 카드 */}
           {notice.link && (
             <button
-              onClick={() => setShowIframe(true)}
+              onClick={() => { setShowIframe(true); onInteraction(); }}
               className="mt-[2vh] flex w-full items-center rounded-[0.6vw] border border-slate-700/60 bg-[#1e293b] transition-all hover:border-cyan-400/30 hover:bg-[#243044]"
               style={{ padding: "1.2vh 1.2vw", gap: "1vw" }}
             >
