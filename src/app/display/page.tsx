@@ -7,6 +7,7 @@ import {
   CATEGORY_STYLES,
   formatAbsolute,
   formatRelative,
+  isNoticeVisible,
 } from "@/lib/categories";
 
 /**
@@ -50,7 +51,8 @@ export default function DisplayPage() {
     );
   }
 
-  const notices = data.notices ?? [];
+  const allNotices = data.notices ?? [];
+  const notices = allNotices.filter((n) => isNoticeVisible(n, now));
   const urgent = notices.filter((n) => asCategory(n.category) === "긴급");
   const others = notices.filter((n) => asCategory(n.category) !== "긴급");
 
