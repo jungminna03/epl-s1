@@ -33,7 +33,7 @@ export default function AdminPage() {
   }
 
   if (!authed) {
-    return <PasswordGate onSuccess={() => setAuthed(true)} />;
+    return <AuthGate onSuccess={() => setAuthed(true)} />;
   }
 
   return <Dashboard onSignOut={() => setAuthed(false)} />;
@@ -43,66 +43,176 @@ export default function AdminPage() {
 /*  Password Gate                                                              */
 /* -------------------------------------------------------------------------- */
 
-function PasswordGate({ onSuccess }: { onSuccess: () => void }) {
-  const [value, setValue] = useState("");
-  const [error, setError] = useState<string | null>(null);
-
-  const expected = process.env.NEXT_PUBLIC_ADMIN_PASSWORD ?? "";
-
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!expected) {
-      setError("관리자 비밀번호가 설정되지 않았습니다. (.env.local 확인)");
-      return;
-    }
-    if (value === expected) {
-      sessionStorage.setItem("admin_authed", "1");
-      onSuccess();
-    } else {
-      setError("비밀번호가 올바르지 않습니다.");
-    }
-  }
+function AuthGate({ onSuccess }: { onSuccess: () => void }) {
+  const [mode, setMode] = useState<"login" | "signup">("login");
 
   return (
     <main className="flex min-h-screen items-center justify-center px-6">
-      <motion.form
+      <motion.div
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
-        onSubmit={handleSubmit}
         className="w-full max-w-sm rounded-3xl border border-white/5 bg-zinc-900/70 p-8 shadow-2xl backdrop-blur"
       >
         <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">Admin</p>
         <h1 className="mt-2 text-2xl font-semibold text-zinc-50">
-          관리자 로그인
+          {mode === "login" ? "관리자 로그인" : "회원가입"}
         </h1>
         <p className="mt-1 text-sm text-zinc-400">
-          공지사항 관리를 위해 비밀번호를 입력하세요.
+          {mode === "login"
+            ? "비밀번호를 입력하세요."
+            : "관리자 계정을 생성합니다."}
         </p>
-        <label className="mt-6 block text-xs font-medium text-zinc-400">
-          비밀번호
-        </label>
+
+        {/* Tab */}
+        <div className="mt-5 flex rounded-xl border border-white/10 bg-zinc-950 p-1">
+          {(["login", "signup"] as const).map((m) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => setMode(m)}
+              className={`flex-1 rounded-lg py-2 text-xs font-medium transition ${
+                mode === m
+                  ? "bg-zinc-800 text-zinc-100"
+                  : "text-zinc-500 hover:text-zinc-300"
+              }`}
+            >
+              {m === "login" ? "로그인" : "회원가입"}
+            </button>
+          ))}
+        </div>
+
+        {mode === "login" ? (
+          <LoginForm onSuccess={onSuccess} />
+        ) : (
+          <SignupForm onSuccess={() => setMode("login")} />
+        )}
+      </motion.div>
+    </main>
+  );
+}
+
+function LoginForm({ onSuccess }: { onSuccess: () => void }) {
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [checking, setChecking] = useState(false);
+
+  const { data } = db.useQuery({ admins: {} });
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setChecking(true);
+    const admins = data?.admins ?? [];
+    const match = admins.find((a) => a.password === password);
+    if (match) {
+      sessionStorage.setItem("admin_authed", "1");
+      sessionStorage.setItem("admin_id", match.id);
+      sessionStorage.setItem("admin_name", match.name);
+      sessionStorage.setItem("admin_position", match.position);
+      onSuccess();
+    } else {
+      setError("비밀번호가 올바르지 않습니다.");
+    }
+    setChecking(false);
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="mt-5 space-y-4">
+      <div>
+        <label className="block text-xs font-medium text-zinc-400">비밀번호</label>
         <input
           type="password"
-          value={value}
-          onChange={(e) => {
-            setValue(e.target.value);
-            setError(null);
-          }}
+          value={password}
+          onChange={(e) => { setPassword(e.target.value); setError(null); }}
           autoFocus
-          className="mt-2 w-full rounded-xl border border-white/10 bg-zinc-950 px-4 py-3 text-sm text-zinc-100 outline-none transition focus:border-zinc-500"
           placeholder="••••••••"
+          className="mt-2 w-full rounded-xl border border-white/10 bg-zinc-950 px-4 py-3 text-sm text-zinc-100 outline-none transition focus:border-zinc-500"
         />
-        {error ? (
-          <p className="mt-3 text-xs text-red-400">{error}</p>
-        ) : null}
-        <button
-          type="submit"
-          className="mt-6 w-full rounded-xl bg-zinc-100 px-4 py-3 text-sm font-medium text-zinc-900 transition hover:bg-white"
-        >
-          입장
-        </button>
-      </motion.form>
-    </main>
+      </div>
+      {error ? <p className="text-xs text-red-400">{error}</p> : null}
+      <button
+        type="submit"
+        disabled={checking}
+        className="w-full rounded-xl bg-zinc-100 px-4 py-3 text-sm font-medium text-zinc-900 transition hover:bg-white disabled:opacity-60"
+      >
+        입장
+      </button>
+    </form>
+  );
+}
+
+function SignupForm({ onSuccess }: { onSuccess: () => void }) {
+  const [name, setName] = useState("");
+  const [position, setPosition] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!name.trim() || !position.trim() || !password.trim()) {
+      setError("모든 항목을 입력해주세요.");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await db.transact(
+        db.tx.admins[id()].update({
+          name: name.trim(),
+          position: position.trim(),
+          password: password.trim(),
+          createdAt: Date.now(),
+        }),
+      );
+      onSuccess();
+    } catch {
+      setError("가입에 실패했습니다. 다시 시도해주세요.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="mt-5 space-y-4">
+      <div>
+        <label className="block text-xs font-medium text-zinc-400">이름</label>
+        <input
+          type="text"
+          value={name}
+          onChange={(e) => { setName(e.target.value); setError(null); }}
+          autoFocus
+          placeholder="홍길동"
+          className="mt-2 w-full rounded-xl border border-white/10 bg-zinc-950 px-4 py-3 text-sm text-zinc-100 outline-none transition focus:border-zinc-500"
+        />
+      </div>
+      <div>
+        <label className="block text-xs font-medium text-zinc-400">직급</label>
+        <input
+          type="text"
+          value={position}
+          onChange={(e) => { setPosition(e.target.value); setError(null); }}
+          placeholder="교수 / 조교 / 행정"
+          className="mt-2 w-full rounded-xl border border-white/10 bg-zinc-950 px-4 py-3 text-sm text-zinc-100 outline-none transition focus:border-zinc-500"
+        />
+      </div>
+      <div>
+        <label className="block text-xs font-medium text-zinc-400">비밀번호</label>
+        <input
+          type="password"
+          value={password}
+          onChange={(e) => { setPassword(e.target.value); setError(null); }}
+          placeholder="••••••••"
+          className="mt-2 w-full rounded-xl border border-white/10 bg-zinc-950 px-4 py-3 text-sm text-zinc-100 outline-none transition focus:border-zinc-500"
+        />
+      </div>
+      {error ? <p className="text-xs text-red-400">{error}</p> : null}
+      <button
+        type="submit"
+        disabled={submitting}
+        className="w-full rounded-xl bg-zinc-100 px-4 py-3 text-sm font-medium text-zinc-900 transition hover:bg-white disabled:opacity-60"
+      >
+        {submitting ? "가입 중…" : "가입하기"}
+      </button>
+    </form>
   );
 }
 
@@ -110,20 +220,36 @@ function PasswordGate({ onSuccess }: { onSuccess: () => void }) {
 /*  Dashboard                                                                  */
 /* -------------------------------------------------------------------------- */
 
+/** "YYYY-MM-DD" → ms timestamp at midnight */
+function dateToMs(dateStr: string): number {
+  return new Date(dateStr + "T00:00:00").getTime();
+}
+
+/** ms timestamp → "YYYY-MM-DD" */
+function msToDate(ms: number): string {
+  const d = new Date(ms);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
 interface FormState {
   id: string | null; // null 이면 새 공지
   title: string;
   content: string;
-  professor: string;
   category: Category;
+  startDate: string; // "YYYY-MM-DD"
+  endDate: string;   // "" means 무기한
 }
 
 const EMPTY_FORM: FormState = {
   id: null,
   title: "",
   content: "",
-  professor: "",
   category: "일반",
+  startDate: new Date().toISOString().slice(0, 10),
+  endDate: "",
 };
 
 function Dashboard({ onSignOut }: { onSignOut: () => void }) {
@@ -133,17 +259,25 @@ function Dashboard({ onSignOut }: { onSignOut: () => void }) {
 
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [submitting, setSubmitting] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
+  const [profileName, setProfileName] = useState(() => sessionStorage.getItem("admin_name") ?? "");
+  const [profilePosition, setProfilePosition] = useState(() => sessionStorage.getItem("admin_position") ?? "");
+  const [profileSaving, setProfileSaving] = useState(false);
 
   const editing = form.id !== null;
   const notices: Notice[] = useMemo(() => data?.notices ?? [], [data]);
+
+  const adminLabel =
+    `${sessionStorage.getItem("admin_name") ?? ""} ${sessionStorage.getItem("admin_position") ?? ""}`.trim();
 
   function startEdit(n: Notice) {
     setForm({
       id: n.id,
       title: n.title,
       content: n.content,
-      professor: n.professor,
       category: asCategory(n.category),
+      startDate: n.startDate ? msToDate(n.startDate) : msToDate(n.createdAt),
+      endDate: n.endDate ? msToDate(n.endDate) : "",
     });
   }
 
@@ -153,7 +287,7 @@ function Dashboard({ onSignOut }: { onSignOut: () => void }) {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.title.trim() || !form.content.trim() || !form.professor.trim()) {
+    if (!form.title.trim() || !form.content.trim()) {
       return;
     }
     setSubmitting(true);
@@ -163,8 +297,10 @@ function Dashboard({ onSignOut }: { onSignOut: () => void }) {
           db.tx.notices[form.id].update({
             title: form.title.trim(),
             content: form.content.trim(),
-            professor: form.professor.trim(),
+            professor: adminLabel,
             category: form.category,
+            startDate: dateToMs(form.startDate),
+            endDate: form.endDate ? dateToMs(form.endDate) : null,
           }),
         );
       } else {
@@ -172,9 +308,11 @@ function Dashboard({ onSignOut }: { onSignOut: () => void }) {
           db.tx.notices[id()].update({
             title: form.title.trim(),
             content: form.content.trim(),
-            professor: form.professor.trim(),
+            professor: adminLabel,
             category: form.category,
             createdAt: Date.now(),
+            startDate: dateToMs(form.startDate),
+            endDate: form.endDate ? dateToMs(form.endDate) : null,
           }),
         );
       }
@@ -191,8 +329,30 @@ function Dashboard({ onSignOut }: { onSignOut: () => void }) {
     if (form.id === n.id) reset();
   }
 
+  async function handleProfileSave() {
+    const adminId = sessionStorage.getItem("admin_id");
+    if (!adminId || !profileName.trim() || !profilePosition.trim()) return;
+    setProfileSaving(true);
+    try {
+      await db.transact(
+        db.tx.admins[adminId].update({
+          name: profileName.trim(),
+          position: profilePosition.trim(),
+        }),
+      );
+      sessionStorage.setItem("admin_name", profileName.trim());
+      sessionStorage.setItem("admin_position", profilePosition.trim());
+      setShowProfile(false);
+    } finally {
+      setProfileSaving(false);
+    }
+  }
+
   function handleSignOut() {
     sessionStorage.removeItem("admin_authed");
+    sessionStorage.removeItem("admin_id");
+    sessionStorage.removeItem("admin_name");
+    sessionStorage.removeItem("admin_position");
     onSignOut();
   }
 
@@ -209,6 +369,13 @@ function Dashboard({ onSignOut }: { onSignOut: () => void }) {
             </h1>
           </div>
           <div className="flex items-center gap-2">
+            <span className="text-xs text-zinc-400">{adminLabel}</span>
+            <button
+              onClick={() => setShowProfile(true)}
+              className="rounded-full border border-zinc-700 px-4 py-2 text-xs font-medium text-zinc-300 transition hover:border-zinc-500 hover:text-white"
+            >
+              프로필 수정
+            </button>
             <a
               href="/display"
               target="_blank"
@@ -226,6 +393,64 @@ function Dashboard({ onSignOut }: { onSignOut: () => void }) {
           </div>
         </div>
       </header>
+
+      {/* Profile modal */}
+      <AnimatePresence>
+        {showProfile ? (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+            onClick={() => setShowProfile(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-sm rounded-2xl border border-white/5 bg-zinc-900 p-6 shadow-2xl"
+            >
+              <h2 className="text-lg font-semibold text-zinc-100">프로필 수정</h2>
+              <div className="mt-4 space-y-3">
+                <div>
+                  <label className="block text-xs font-medium text-zinc-400">이름</label>
+                  <input
+                    type="text"
+                    value={profileName}
+                    onChange={(e) => setProfileName(e.target.value)}
+                    className="mt-1.5 w-full rounded-xl border border-white/10 bg-zinc-950 px-3 py-2.5 text-sm text-zinc-100 outline-none transition focus:border-zinc-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-zinc-400">직급</label>
+                  <input
+                    type="text"
+                    value={profilePosition}
+                    onChange={(e) => setProfilePosition(e.target.value)}
+                    className="mt-1.5 w-full rounded-xl border border-white/10 bg-zinc-950 px-3 py-2.5 text-sm text-zinc-100 outline-none transition focus:border-zinc-500"
+                  />
+                </div>
+              </div>
+              <div className="mt-5 flex gap-2">
+                <button
+                  onClick={handleProfileSave}
+                  disabled={profileSaving}
+                  className="flex-1 rounded-xl bg-zinc-100 px-4 py-2.5 text-sm font-medium text-zinc-900 transition hover:bg-white disabled:opacity-60"
+                >
+                  {profileSaving ? "저장 중…" : "저장"}
+                </button>
+                <button
+                  onClick={() => setShowProfile(false)}
+                  className="rounded-xl border border-white/10 px-4 py-2.5 text-sm text-zinc-300 hover:border-white/30"
+                >
+                  취소
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
 
       <div className="mx-auto grid w-full max-w-6xl gap-6 px-6 py-8 lg:grid-cols-[1fr_400px]">
         {/* List */}
@@ -295,18 +520,6 @@ function Dashboard({ onSignOut }: { onSignOut: () => void }) {
                 />
               </Field>
 
-              <Field label="작성자 (교수명)">
-                <input
-                  type="text"
-                  value={form.professor}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, professor: e.target.value }))
-                  }
-                  placeholder="예: 김교수"
-                  className="w-full rounded-xl border border-white/10 bg-zinc-950 px-3 py-2.5 text-sm text-zinc-100 outline-none transition focus:border-zinc-500"
-                />
-              </Field>
-
               <Field label="내용">
                 <textarea
                   value={form.content}
@@ -317,6 +530,33 @@ function Dashboard({ onSignOut }: { onSignOut: () => void }) {
                   placeholder="공지 내용을 입력하세요."
                   className="w-full resize-y rounded-xl border border-white/10 bg-zinc-950 px-3 py-2.5 text-sm leading-relaxed text-zinc-100 outline-none transition focus:border-zinc-500"
                 />
+              </Field>
+
+              <Field label="게시 기간">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="date"
+                    value={form.startDate}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, startDate: e.target.value }))
+                    }
+                    className="flex-1 rounded-xl border border-white/10 bg-zinc-950 px-3 py-2.5 text-sm text-zinc-100 outline-none transition focus:border-zinc-500"
+                  />
+                  <span className="text-xs text-zinc-500">~</span>
+                  <input
+                    type="date"
+                    value={form.endDate}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, endDate: e.target.value }))
+                    }
+                    className="flex-1 rounded-xl border border-white/10 bg-zinc-950 px-3 py-2.5 text-sm text-zinc-100 outline-none transition focus:border-zinc-500"
+                  />
+                </div>
+                {!form.endDate && (
+                  <p className="mt-1 text-[11px] text-zinc-500">
+                    종료일을 비우면 무기한 게시됩니다.
+                  </p>
+                )}
               </Field>
 
               <div className="flex items-center gap-2 pt-2">
@@ -460,6 +700,10 @@ function NoticeRow({
             </span>
             <span className="text-[11px] text-zinc-500">
               {formatAbsolute(notice.createdAt)}
+              {" · "}
+              {notice.startDate ? msToDate(notice.startDate) : msToDate(notice.createdAt)}
+              {" ~ "}
+              {notice.endDate ? msToDate(notice.endDate) : "무기한"}
             </span>
           </div>
           <h3 className="mt-1.5 truncate text-sm font-semibold text-zinc-100">
