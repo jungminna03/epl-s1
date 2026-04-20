@@ -11,6 +11,7 @@ import {
   parseCategories,
   type CategoryStyle,
 } from "@/lib/categories";
+import { fireCheckEffect } from "@/lib/check-effects";
 
 const CYCLE_MS = 10_000;
 const TAP_PAUSE_MS = 60_000;
@@ -626,12 +627,12 @@ function CheckButton({
   notice: Notice;
   onInteraction: () => void;
 }) {
-  const [animKey, setAnimKey] = useState(0);
   const [localAdded, setLocalAdded] = useState(0);
+  const [locked, setLocked] = useState(false);
+  const btnRef = useRef<HTMLButtonElement>(null);
   const dbCount = (notice as Notice & { checkCount?: number }).checkCount ?? 0;
   const prevDbCount = useRef(dbCount);
 
-  // DB 값이 바뀌면 로컬 보정값 리셋
   if (dbCount !== prevDbCount.current) {
     prevDbCount.current = dbCount;
     setLocalAdded(0);
@@ -640,32 +641,45 @@ function CheckButton({
   const count = dbCount + localAdded;
 
   function handleCheck() {
+    if (locked) return;
     onInteraction();
     setLocalAdded((a) => a + 1);
-    setAnimKey((k) => k + 1);
     db.transact(
       db.tx.notices[notice.id].update({ checkCount: dbCount + localAdded + 1 }),
     );
+
+    if (btnRef.current) {
+      const r = btnRef.current.getBoundingClientRect();
+      const result = fireCheckEffect(r.left + r.width / 2, r.top + r.height / 2);
+      if (result.cooldownMs > 0) {
+        setLocked(true);
+        setTimeout(() => setLocked(false), result.cooldownMs);
+      }
+    }
   }
 
   return (
-    <button
-      onClick={handleCheck}
-      className="flex items-center rounded-full border border-slate-700/60 bg-[#1e293b] transition-all hover:border-cyan-400/30 hover:bg-[#243044] active:scale-95"
-      style={{ padding: "0.4vh 1vw", gap: "0.5vw" }}
-    >
-      <motion.span
-        key={animKey}
-        initial={animKey > 0 ? { scale: 1.5 } : false}
-        animate={{ scale: 1 }}
-        transition={{ type: "spring", stiffness: 400, damping: 15 }}
-        style={{ fontSize: "1vw" }}
+    <div className="flex items-center" style={{ gap: "0.6vw" }}>
+      <button
+        ref={btnRef}
+        onClick={handleCheck}
+        className="flex items-center rounded-full border border-slate-700/60 bg-[#1e293b] transition-all hover:border-cyan-400/30 hover:bg-[#243044] active:scale-95"
+        style={{
+          padding: "0.4vh 1vw",
+          gap: "0.5vw",
+          opacity: locked ? 0.5 : 1,
+          pointerEvents: locked ? "none" : "auto",
+        }}
       >
-        ✓
-      </motion.span>
-      <span className="font-semibold text-slate-300" style={{ fontSize: "0.85vw" }}>
-        {count}
+        <span style={{ fontSize: "1vw" }}>✓</span>
+        <span className="font-semibold text-slate-300" style={{ fontSize: "0.85vw" }}>
+          {count}
+        </span>
+      </button>
+      <span style={{ fontSize: "0.75vw", color: "#94a3b8" }}>
+        <span style={{ color: "#a78bfa" }}>👀</span>
+        {" "}읽어보셨다면… 체크 한번 해보실래요?
       </span>
-    </button>
+    </div>
   );
 }
