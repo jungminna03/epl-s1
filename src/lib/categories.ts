@@ -1,4 +1,4 @@
-import type { Category } from "./instant";
+import { CATEGORIES, type Category } from "./instant";
 
 export interface CategoryStyle {
   label: string;
@@ -120,6 +120,20 @@ export function formatAbsolute(ts: number): string {
  * - startDate 없으면 createdAt 사용
  * - endDate 없으면 무기한
  */
+/**
+ * 쉼표로 구분된 카테고리 문자열을 파싱.
+ * "1학년,3학년" → ["1학년", "3학년"]
+ */
+export function parseCategories(raw: string): Category[] {
+  if (!raw) return [];
+  return raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s): s is Category =>
+      (CATEGORIES as readonly string[]).includes(s),
+    );
+}
+
 export function isNoticeVisible(
   notice: { createdAt: number; startDate?: number; endDate?: number },
   now: number = Date.now(),

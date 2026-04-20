@@ -4,13 +4,12 @@ import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { id } from "@instantdb/react";
 import {
-  asCategory,
   CATEGORIES,
   db,
   type Category,
   type Notice,
 } from "@/lib/instant";
-import { CATEGORY_STYLES, DEFAULT_STYLE, formatAbsolute } from "@/lib/categories";
+import { CATEGORY_STYLES, DEFAULT_STYLE, formatAbsolute, parseCategories } from "@/lib/categories";
 
 /**
  * /admin
@@ -121,7 +120,7 @@ interface FormState {
   id: string | null; // null 이면 새 공지
   title: string;
   content: string;
-  category: Category | "";
+  category: string; // 쉼표 구분 다중 카테고리 (e.g. "1학년,3학년")
   link: string;
   startDate: string; // "YYYY-MM-DD"
   endDate: string;   // "" means 무기한
@@ -153,7 +152,7 @@ function Dashboard({ onSignOut }: { onSignOut: () => void }) {
       id: n.id,
       title: n.title,
       content: n.content,
-      category: asCategory(n.category) ?? "",
+      category: n.category ?? "",
       link: n.link ?? "",
       startDate: n.startDate ? msToDate(n.startDate) : msToDate(n.createdAt),
       endDate: n.endDate ? msToDate(n.endDate) : "",
@@ -440,19 +439,28 @@ function CategoryPicker({
   value,
   onChange,
 }: {
-  value: Category | "";
-  onChange: (c: Category | "") => void;
+  value: string;
+  onChange: (c: string) => void;
 }) {
+  const selected = parseCategories(value);
+
+  function toggle(c: Category) {
+    const next = selected.includes(c)
+      ? selected.filter((s) => s !== c)
+      : [...selected, c];
+    onChange(next.join(","));
+  }
+
   return (
     <div className="grid grid-cols-4 gap-2">
       {CATEGORIES.map((c) => {
         const s = CATEGORY_STYLES[c];
-        const active = value === c;
+        const active = selected.includes(c);
         return (
           <button
             key={c}
             type="button"
-            onClick={() => onChange(active ? "" : c)}
+            onClick={() => toggle(c)}
             className={`rounded-xl border px-3 py-2 text-sm font-medium transition ${
               active
                 ? `${s.badge} border-current`
@@ -479,8 +487,8 @@ function NoticeRow({
   onEdit: () => void;
   onDelete: () => void;
 }) {
-  const cat = asCategory(notice.category);
-  const s = cat ? CATEGORY_STYLES[cat] : DEFAULT_STYLE;
+  const cats = parseCategories(notice.category);
+  const s = cats.length > 0 ? CATEGORY_STYLES[cats[0]] : DEFAULT_STYLE;
 
   return (
     <motion.li
@@ -499,13 +507,17 @@ function NoticeRow({
       <div className="flex items-start justify-between gap-3 pl-2">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            {cat && (
-              <span
-                className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium ${s.badge}`}
-              >
-                {s.label}
-              </span>
-            )}
+            {cats.map((c) => {
+              const cs = CATEGORY_STYLES[c];
+              return (
+                <span
+                  key={c}
+                  className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium ${cs.badge}`}
+                >
+                  {cs.label}
+                </span>
+              );
+            })}
             <span className="text-[11px] text-zinc-500">
               {formatAbsolute(notice.createdAt)}
               {" · "}
@@ -520,6 +532,12 @@ function NoticeRow({
           <p className="mt-1 line-clamp-2 text-xs text-zinc-400">
             {notice.content}
           </p>
+          {((notice as Notice & { checkCount?: number }).checkCount ?? 0) > 0 && (
+            <p className="mt-1.5 flex items-center gap-1 text-[11px] text-emerald-400">
+              <span>✓</span>
+              {(notice as Notice & { checkCount?: number }).checkCount}
+            </p>
+          )}
         </div>
         <div className="flex shrink-0 flex-col gap-1.5">
           <button

@@ -15,6 +15,7 @@ const _schema = i.schema({
       link: i.string().optional(),
       startDate: i.number().optional(),
       endDate: i.number().optional(),
+      checkCount: i.number().optional(),
     }),
     admins: i.entity({
       name: i.string(),

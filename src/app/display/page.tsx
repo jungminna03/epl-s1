@@ -2,12 +2,13 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { db, asCategory, type Notice } from "@/lib/instant";
+import { db, type Notice } from "@/lib/instant";
 import {
   CATEGORY_STYLES,
   DEFAULT_STYLE,
   formatRelative,
   isNoticeVisible,
+  parseCategories,
   type CategoryStyle,
 } from "@/lib/categories";
 
@@ -62,8 +63,8 @@ function SignageLayout({ notices, now }: { notices: Notice[]; now: number }) {
   const cycleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const selected = notices[currentIdx] ?? null;
-  const selectedCat = selected ? asCategory(selected.category) : null;
-  const style = selected ? (selectedCat ? CATEGORY_STYLES[selectedCat] : DEFAULT_STYLE) : null;
+  const selectedCats = selected ? parseCategories(selected.category) : [];
+  const style = selected ? (selectedCats.length > 0 ? CATEGORY_STYLES[selectedCats[0]] : DEFAULT_STYLE) : null;
 
   const advance = useCallback(() => {
     if (notices.length === 0) return;
@@ -274,14 +275,25 @@ function DetailPanel({
           className="relative z-10 my-auto"
           style={{ padding: "3vh 3vw" }}
         >
-          {style.label && (
-            <span
-              className={`inline-flex items-center rounded-full border font-bold ${style.badge}`}
-              style={{ fontSize: "0.9vw", padding: "0.3vh 1vw", gap: "0.4vw" }}
-            >
-              {style.label}
-            </span>
-          )}
+          {(() => {
+            const cats = parseCategories(notice.category);
+            return cats.length > 0 ? (
+              <div className="flex flex-wrap" style={{ gap: "0.5vw" }}>
+                {cats.map((c) => {
+                  const cs = CATEGORY_STYLES[c];
+                  return (
+                    <span
+                      key={c}
+                      className={`inline-flex items-center rounded-full border font-bold ${cs.badge}`}
+                      style={{ fontSize: "0.9vw", padding: "0.3vh 1vw", gap: "0.4vw" }}
+                    >
+                      {cs.label}
+                    </span>
+                  );
+                })}
+              </div>
+            ) : null;
+          })()}
 
           <h2
             className="font-extrabold text-slate-50 leading-[1.3]"
@@ -297,12 +309,12 @@ function DetailPanel({
             {notice.content}
           </p>
 
-          <p
-            className="text-slate-600"
-            style={{ fontSize: "0.9vw", marginTop: "2.5vh" }}
-          >
-            {formatRelative(notice.createdAt, now)}
-          </p>
+          <div className="flex items-center" style={{ marginTop: "2.5vh", gap: "1.2vw" }}>
+            <p className="text-slate-600" style={{ fontSize: "0.9vw" }}>
+              {formatRelative(notice.createdAt, now)}
+            </p>
+            <CheckButton notice={notice} onInteraction={onInteraction} />
+          </div>
 
           {/* 북마크 카드 */}
           {notice.link && (
@@ -506,8 +518,8 @@ function NoticeItem({
   now: number;
   height: number;
 }) {
-  const cat = asCategory(notice.category);
-  const style = cat ? CATEGORY_STYLES[cat] : DEFAULT_STYLE;
+  const cats = parseCategories(notice.category);
+  const style = cats.length > 0 ? CATEGORY_STYLES[cats[0]] : DEFAULT_STYLE;
 
   return (
     <motion.div
@@ -555,14 +567,22 @@ function NoticeItem({
         />
       )}
 
-      {/* Badge */}
-      {style.label && (
-        <span
-          className={`shrink-0 rounded-full border font-semibold ${style.badge}`}
-          style={{ fontSize: "0.8vw", padding: "0.3vh 0.7vw" }}
-        >
-          {style.label}
-        </span>
+      {/* Badges */}
+      {cats.length > 0 && (
+        <div className="flex shrink-0 flex-col" style={{ gap: "0.3vh" }}>
+          {cats.map((c) => {
+            const cs = CATEGORY_STYLES[c];
+            return (
+              <span
+                key={c}
+                className={`shrink-0 rounded-full border font-semibold text-center ${cs.badge}`}
+                style={{ fontSize: "0.8vw", padding: "0.3vh 0.7vw" }}
+              >
+                {cs.label}
+              </span>
+            );
+          })}
+        </div>
       )}
 
       {/* Info */}
@@ -594,5 +614,58 @@ function NoticeItem({
         ◂
       </span>
     </motion.div>
+  );
+}
+
+/* ─── Check Button ─── */
+
+function CheckButton({
+  notice,
+  onInteraction,
+}: {
+  notice: Notice;
+  onInteraction: () => void;
+}) {
+  const [animKey, setAnimKey] = useState(0);
+  const [localAdded, setLocalAdded] = useState(0);
+  const dbCount = (notice as Notice & { checkCount?: number }).checkCount ?? 0;
+  const prevDbCount = useRef(dbCount);
+
+  // DB 값이 바뀌면 로컬 보정값 리셋
+  if (dbCount !== prevDbCount.current) {
+    prevDbCount.current = dbCount;
+    setLocalAdded(0);
+  }
+
+  const count = dbCount + localAdded;
+
+  function handleCheck() {
+    onInteraction();
+    setLocalAdded((a) => a + 1);
+    setAnimKey((k) => k + 1);
+    db.transact(
+      db.tx.notices[notice.id].update({ checkCount: dbCount + localAdded + 1 }),
+    );
+  }
+
+  return (
+    <button
+      onClick={handleCheck}
+      className="flex items-center rounded-full border border-slate-700/60 bg-[#1e293b] transition-all hover:border-cyan-400/30 hover:bg-[#243044] active:scale-95"
+      style={{ padding: "0.4vh 1vw", gap: "0.5vw" }}
+    >
+      <motion.span
+        key={animKey}
+        initial={animKey > 0 ? { scale: 1.5 } : false}
+        animate={{ scale: 1 }}
+        transition={{ type: "spring", stiffness: 400, damping: 15 }}
+        style={{ fontSize: "1vw" }}
+      >
+        ✓
+      </motion.span>
+      <span className="font-semibold text-slate-300" style={{ fontSize: "0.85vw" }}>
+        {count}
+      </span>
+    </button>
   );
 }
