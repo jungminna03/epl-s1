@@ -19,6 +19,10 @@ const PAGE_SIZE = 4;
 
 const SPRING = { type: "spring" as const, stiffness: 200, damping: 25 };
 
+function getCheckCount(notice: Notice): number {
+  return (notice as Notice & { checkCount?: number }).checkCount ?? 0;
+}
+
 /* ─── Data Fetching (default export) ─── */
 
 export default function DisplayPage() {
@@ -351,7 +355,7 @@ function GridTile({
 }) {
   const cats = parseCategories(notice.category);
   const style = cats.length > 0 ? CATEGORY_STYLES[cats[0]] : DEFAULT_STYLE;
-  const dbCount = (notice as Notice & { checkCount?: number }).checkCount ?? 0;
+  const dbCount = getCheckCount(notice);
 
   return (
     <motion.div
@@ -668,13 +672,20 @@ function CheckButton({
   const [localAdded, setLocalAdded] = useState(0);
   const [locked, setLocked] = useState(false);
   const btnRef = useRef<HTMLButtonElement>(null);
-  const dbCount = (notice as Notice & { checkCount?: number }).checkCount ?? 0;
+  const lockTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const dbCount = getCheckCount(notice);
   const prevDbCount = useRef(dbCount);
 
   if (dbCount !== prevDbCount.current) {
     prevDbCount.current = dbCount;
     setLocalAdded(0);
   }
+
+  useEffect(() => {
+    return () => {
+      if (lockTimer.current) clearTimeout(lockTimer.current);
+    };
+  }, []);
 
   const count = dbCount + localAdded;
 
@@ -691,7 +702,8 @@ function CheckButton({
       const result = fireCheckEffect(r.left + r.width / 2, r.top + r.height / 2);
       if (result.cooldownMs > 0) {
         setLocked(true);
-        setTimeout(() => setLocked(false), result.cooldownMs);
+        if (lockTimer.current) clearTimeout(lockTimer.current);
+        lockTimer.current = setTimeout(() => setLocked(false), result.cooldownMs);
       }
     }
   }
