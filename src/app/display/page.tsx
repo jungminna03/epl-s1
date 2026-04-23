@@ -18,7 +18,7 @@ const RETURN_MS = 60_000;
 const PAGE_SIZE = 4;
 
 const SPRING = { type: "spring" as const, stiffness: 200, damping: 25 };
-const SPRING_EXPAND = { type: "spring" as const, stiffness: 120, damping: 22, mass: 1.2 };
+const TWEEN_EXPAND = { type: "tween" as const, duration: 0.45, ease: "linear" as const };
 
 function getCheckCount(notice: Notice): number {
   return (notice as Notice & { checkCount?: number }).checkCount ?? 0;
@@ -595,7 +595,7 @@ function ExpandedTile({
         background: "linear-gradient(#0f1219, #0f1219) padding-box, linear-gradient(135deg, rgba(34,211,238,0.45), rgba(96,165,250,0.3), rgba(167,139,250,0.45)) border-box",
         border: "1.5px solid transparent",
       }}
-      transition={SPRING_EXPAND}
+      transition={TWEEN_EXPAND}
     >
       {/* Ambient glow */}
       <div
