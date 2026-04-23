@@ -157,20 +157,19 @@ function SignageLayout({ notices, now }: { notices: Notice[]; now: number }) {
   );
 
   // --- Swipe direction for slide animation ---
-  const slideDirection = useRef(1); // 1 = forward (left), -1 = backward (right)
+  const slideDirection = useRef(1); // 1 = forward (up), -1 = backward (down)
 
-  // --- Drag-based swipe to change page ---
+  // --- Drag-based swipe to change page (vertical) ---
   const handleDragEnd = useCallback(
-    (_: unknown, info: { offset: { x: number }; velocity: { x: number } }) => {
+    (_: unknown, info: { offset: { y: number }; velocity: { y: number } }) => {
       if (expandedId) return;
       const { offset, velocity } = info;
-      // Swipe threshold: either dragged far enough or flicked fast enough
-      const swipe = Math.abs(offset.x) * 0.5 + Math.abs(velocity.x) * 0.3;
+      const swipe = Math.abs(offset.y) * 0.5 + Math.abs(velocity.y) * 0.3;
       if (swipe > 40) {
-        if (offset.x < 0 && pageIdx < totalPages - 1) {
+        if (offset.y < 0 && pageIdx < totalPages - 1) {
           slideDirection.current = 1;
           setPageIdx((p) => p + 1);
-        } else if (offset.x > 0 && pageIdx > 0) {
+        } else if (offset.y > 0 && pageIdx > 0) {
           slideDirection.current = -1;
           setPageIdx((p) => p - 1);
         }
@@ -220,13 +219,13 @@ function SignageLayout({ notices, now }: { notices: Notice[]; now: number }) {
               animate="center"
               exit="exit"
               variants={{
-                enter: (dir: number) => ({ x: `${dir * 105}%`, opacity: 0.5 }),
-                center: { x: 0, opacity: 1 },
-                exit: (dir: number) => ({ x: `${dir * -105}%`, opacity: 0.5 }),
+                enter: (dir: number) => ({ y: `${dir * 105}%`, opacity: 0.5 }),
+                center: { y: 0, opacity: 1 },
+                exit: (dir: number) => ({ y: `${dir * -105}%`, opacity: 0.5 }),
               }}
               transition={{ type: "spring", stiffness: 300, damping: 30 }}
-              drag={expandedId ? false : "x"}
-              dragConstraints={{ left: 0, right: 0 }}
+              drag={expandedId ? false : "y"}
+              dragConstraints={{ top: 0, bottom: 0 }}
               dragElastic={0.18}
               onDragEnd={handleDragEnd}
             >
@@ -672,16 +671,13 @@ function ExpandedTile({
           {notice.content}
         </p>
 
-        {/* Time + check button */}
-        <div
-          className="flex items-center"
-          style={{ marginTop: "2.5vh", gap: "1.2vh" }}
-        >
-          <p className="text-slate-600" style={{ fontSize: "1.2vh" }}>
-            {formatRelative(notice.createdAt, now)}
-          </p>
-          <CheckButton notice={notice} onInteraction={onInteraction} />
-        </div>
+        {/* Time */}
+        <p className="text-slate-600" style={{ fontSize: "1.2vh", marginTop: "2.5vh" }}>
+          {formatRelative(notice.createdAt, now)}
+        </p>
+
+        {/* Check button — big & tappable */}
+        <CheckButton notice={notice} onInteraction={onInteraction} />
 
         {/* Link card */}
         {notice.link && (
@@ -776,31 +772,51 @@ function CheckButton({
   }
 
   return (
-    <div className="flex items-center" style={{ gap: "0.6vh" }}>
-      <button
-        ref={btnRef}
-        onClick={handleCheck}
-        className="flex items-center rounded-full border border-slate-700/60 bg-[#1e293b] transition-all hover:border-cyan-400/30 hover:bg-[#243044] active:scale-95"
+    <button
+      ref={btnRef}
+      onClick={handleCheck}
+      className="flex w-full items-center justify-center rounded-[1vh] border transition-all active:scale-[0.97]"
+      style={{
+        marginTop: "2vh",
+        padding: "1.8vh 2vh",
+        gap: "1vh",
+        background: locked
+          ? "rgba(30,41,59,0.5)"
+          : "linear-gradient(135deg, rgba(167,139,250,0.15), rgba(34,211,238,0.10))",
+        borderColor: locked
+          ? "rgba(100,116,139,0.2)"
+          : "rgba(167,139,250,0.25)",
+        opacity: locked ? 0.5 : 1,
+        pointerEvents: locked ? "none" : "auto",
+      }}
+    >
+      <span
+        className="flex items-center justify-center rounded-full"
         style={{
-          padding: "0.5vh 1.2vh",
-          gap: "0.5vh",
-          opacity: locked ? 0.5 : 1,
-          pointerEvents: locked ? "none" : "auto",
+          width: "3.5vh",
+          height: "3.5vh",
+          background: "rgba(167,139,250,0.2)",
+          border: "1px solid rgba(167,139,250,0.3)",
+          fontSize: "1.8vh",
         }}
       >
-        <span style={{ fontSize: "1.2vh" }}>✓</span>
-        <span
-          className="font-semibold text-slate-300"
-          style={{ fontSize: "1.1vh" }}
-        >
-          {count}
-        </span>
-      </button>
-      <span style={{ fontSize: "1vh", color: "#94a3b8" }}>
-        <span style={{ color: "#a78bfa" }}>👀</span> 읽어보셨다면… 체크 한번
-        해보실래요?
+        ✓
       </span>
-    </div>
+      <div className="flex flex-col items-start" style={{ gap: "0.2vh" }}>
+        <span
+          className="font-bold text-slate-200"
+          style={{ fontSize: "1.6vh", lineHeight: 1 }}
+        >
+          확인했어요{" "}
+          <span className="text-purple-400" style={{ fontSize: "1.4vh" }}>
+            {count > 0 ? count : ""}
+          </span>
+        </span>
+        <span className="text-slate-500" style={{ fontSize: "1vh", lineHeight: 1 }}>
+          읽어보셨다면 체크 한번 해보실래요?
+        </span>
+      </div>
+    </button>
   );
 }
 
