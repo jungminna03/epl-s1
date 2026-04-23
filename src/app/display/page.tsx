@@ -441,10 +441,10 @@ function GridTile({
       {/* Title + summary */}
       <div className="min-w-0 flex-1">
         <h3
-          className="font-extrabold text-slate-50 leading-[1.25] truncate"
+          className="font-extrabold text-slate-50 leading-[1.2] truncate"
           style={{
-            fontSize: "2.4vh",
-            letterSpacing: "-0.03vh",
+            fontSize: "3.2vh",
+            letterSpacing: "-0.05vh",
           }}
         >
           {notice.title}
@@ -625,7 +625,7 @@ function ExpandedTile({
       {/* Scrollable content */}
       <div
         ref={scrollRef}
-        className="relative z-10 flex-1 overflow-y-auto"
+        className="relative z-10 flex-1 overflow-y-auto text-center flex flex-col justify-center"
         style={{ padding: "3vh" }}
         onScroll={onInteraction}
         onTouchStart={(e) => captureStart(e.touches[0].clientX, e.touches[0].clientY)}
@@ -635,7 +635,7 @@ function ExpandedTile({
       >
         {/* Category badges */}
         {cats.length > 0 && (
-          <div className="flex flex-wrap" style={{ gap: "0.5vh" }}>
+          <div className="flex flex-wrap justify-center" style={{ gap: "0.5vh" }}>
             {cats.map((c) => {
               const cs = CATEGORY_STYLES[c];
               return (
@@ -676,9 +676,6 @@ function ExpandedTile({
           {formatRelative(notice.createdAt, now)}
         </p>
 
-        {/* Check button — big & tappable */}
-        <CheckButton notice={notice} onInteraction={onInteraction} />
-
         {/* Link card */}
         {notice.link && (
           <button
@@ -718,6 +715,9 @@ function ExpandedTile({
             </span>
           </button>
         )}
+
+        {/* Check button — big & tappable */}
+        <CheckButton notice={notice} onInteraction={onInteraction} />
       </div>
     </motion.div>
   );
