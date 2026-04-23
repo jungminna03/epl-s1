@@ -94,6 +94,7 @@ function SignageLayout({ notices, now }: { notices: Notice[]; now: number }) {
   const startCycle = useCallback(() => {
     if (cycleRef.current) clearInterval(cycleRef.current);
     cycleRef.current = setInterval(() => {
+      slideDirection.current = 1;
       setPageIdx((p) => (p + 1) % Math.max(1, totalPages));
     }, CYCLE_MS);
   }, [totalPages]);
@@ -155,25 +156,28 @@ function SignageLayout({ notices, now }: { notices: Notice[]; now: number }) {
     [],
   );
 
-  // --- Swipe to change page ---
-  const swipeStart = useRef<{ x: number; y: number } | null>(null);
+  // --- Swipe direction for slide animation ---
+  const slideDirection = useRef(1); // 1 = forward (left), -1 = backward (right)
 
-  const handlePointerDown = useCallback((x: number, y: number) => {
-    if (expandedId) return;
-    swipeStart.current = { x, y };
-  }, [expandedId]);
-
-  const handlePointerUp = useCallback((x: number) => {
-    if (!swipeStart.current || expandedId) return;
-    const dx = swipeStart.current.x - x;
-    swipeStart.current = null;
-    if (Math.abs(dx) < 50) return;
-    if (dx > 0 && pageIdx < totalPages - 1) {
-      setPageIdx((p) => p + 1);
-    } else if (dx < 0 && pageIdx > 0) {
-      setPageIdx((p) => p - 1);
-    }
-  }, [expandedId, pageIdx, totalPages]);
+  // --- Drag-based swipe to change page ---
+  const handleDragEnd = useCallback(
+    (_: unknown, info: { offset: { x: number }; velocity: { x: number } }) => {
+      if (expandedId) return;
+      const { offset, velocity } = info;
+      // Swipe threshold: either dragged far enough or flicked fast enough
+      const swipe = Math.abs(offset.x) * 0.5 + Math.abs(velocity.x) * 0.3;
+      if (swipe > 40) {
+        if (offset.x < 0 && pageIdx < totalPages - 1) {
+          slideDirection.current = 1;
+          setPageIdx((p) => p + 1);
+        } else if (offset.x > 0 && pageIdx > 0) {
+          slideDirection.current = -1;
+          setPageIdx((p) => p - 1);
+        }
+      }
+    },
+    [expandedId, pageIdx, totalPages],
+  );
 
   // Current page of notices
   const pageNotices = notices.slice(pageIdx * PAGE_SIZE, pageIdx * PAGE_SIZE + PAGE_SIZE);
@@ -198,15 +202,11 @@ function SignageLayout({ notices, now }: { notices: Notice[]; now: number }) {
 
         {/* Content area: grid + overlay */}
         <div
-          className="relative flex-1 min-h-0"
+          className="relative flex-1 min-h-0 overflow-hidden"
           style={{ padding: "1.5vh" }}
-          onTouchStart={(e) => handlePointerDown(e.touches[0].clientX, e.touches[0].clientY)}
-          onTouchEnd={(e) => handlePointerUp(e.changedTouches[0].clientX)}
-          onMouseDown={(e) => handlePointerDown(e.clientX, e.clientY)}
-          onMouseUp={(e) => handlePointerUp(e.clientX)}
         >
           {/* 2×2 Grid */}
-          <AnimatePresence mode="wait">
+          <AnimatePresence initial={false} mode="popLayout" custom={slideDirection.current}>
             <motion.div
               key={pageIdx}
               className="grid h-full"
@@ -215,10 +215,20 @@ function SignageLayout({ notices, now }: { notices: Notice[]; now: number }) {
                 gridTemplateRows: "1fr 1fr",
                 gap: "1.5vh",
               }}
-              initial={{ opacity: 0, x: 30 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -30 }}
-              transition={{ duration: 0.35, ease: "easeOut" }}
+              custom={slideDirection.current}
+              initial="enter"
+              animate="center"
+              exit="exit"
+              variants={{
+                enter: (dir: number) => ({ x: `${dir * 105}%`, opacity: 0.5 }),
+                center: { x: 0, opacity: 1 },
+                exit: (dir: number) => ({ x: `${dir * -105}%`, opacity: 0.5 }),
+              }}
+              transition={{ type: "spring", stiffness: 300, damping: 30 }}
+              drag={expandedId ? false : "x"}
+              dragConstraints={{ left: 0, right: 0 }}
+              dragElastic={0.18}
+              onDragEnd={handleDragEnd}
             >
               {Array.from({ length: PAGE_SIZE }).map((_, i) => {
                 const notice = pageNotices[i];
@@ -328,7 +338,7 @@ function TopBar({ now }: { now: number }) {
             animation: "livePulse 2s ease-in-out infinite",
           }}
         />
-        <span style={{ fontSize: "1.3vh", letterSpacing: "0.02vh" }}>
+        <span style={{ fontSize: "2.2vh", letterSpacing: "0.02vh" }}>
           <span
             className="font-extrabold"
             style={{
@@ -351,14 +361,14 @@ function TopBar({ now }: { now: number }) {
       <div className="flex items-center" style={{ gap: "1vh" }}>
         <div
           className="text-right text-slate-600"
-          style={{ fontSize: "0.9vh", lineHeight: 1.4 }}
+          style={{ fontSize: "1.3vh", lineHeight: 1.4 }}
         >
           <div>{date}</div>
           <div>{weekday}요일</div>
         </div>
         <span
           className="font-extrabold text-slate-50 leading-none tracking-tighter"
-          style={{ fontSize: "2.8vh", fontVariantNumeric: "tabular-nums" }}
+          style={{ fontSize: "3.8vh", fontVariantNumeric: "tabular-nums" }}
         >
           {time}
         </span>
@@ -388,7 +398,7 @@ function GridTile({
     <motion.div
       layoutId={`tile-${notice.id}`}
       onClick={onClick}
-      className="relative flex flex-col cursor-pointer overflow-hidden rounded-[1.5vh]"
+      className="relative flex flex-col justify-center cursor-pointer overflow-hidden rounded-[1.5vh]"
       style={{
         background: "#1a2233",
         border: `1px solid rgba(148,163,184,0.08)`,
@@ -412,14 +422,14 @@ function GridTile({
 
       {/* Category badges */}
       {cats.length > 0 && (
-        <div className="flex flex-wrap" style={{ gap: "0.4vh", marginBottom: "0.8vh" }}>
+        <div className="flex flex-wrap" style={{ gap: "0.5vh", marginBottom: "1vh" }}>
           {cats.map((c) => {
             const cs = CATEGORY_STYLES[c];
             return (
               <span
                 key={c}
                 className={`inline-flex items-center rounded-full border font-bold ${cs.badge}`}
-                style={{ fontSize: "1vh", padding: "0.2vh 0.8vh" }}
+                style={{ fontSize: "1.1vh", padding: "0.3vh 1vh" }}
               >
                 {cs.label}
               </span>
@@ -430,10 +440,10 @@ function GridTile({
 
       {/* Title (2-line clamp) */}
       <h3
-        className="font-bold text-slate-100 leading-[1.3]"
+        className="font-extrabold text-slate-50 leading-[1.25]"
         style={{
-          fontSize: "1.8vh",
-          letterSpacing: "-0.03vh",
+          fontSize: "2.8vh",
+          letterSpacing: "-0.05vh",
           display: "-webkit-box",
           WebkitLineClamp: 2,
           WebkitBoxOrient: "vertical",
@@ -446,10 +456,10 @@ function GridTile({
       {/* Summary (2-line clamp) */}
       {notice.content && (
         <p
-          className="text-slate-500 leading-[1.5]"
+          className="text-slate-400 leading-[1.5]"
           style={{
-            fontSize: "1.2vh",
-            marginTop: "0.6vh",
+            fontSize: "1.3vh",
+            marginTop: "0.8vh",
             display: "-webkit-box",
             WebkitLineClamp: 2,
             WebkitBoxOrient: "vertical",
@@ -498,6 +508,43 @@ function ExpandedTile({
   const cats = parseCategories(notice.category);
   const style = cats.length > 0 ? CATEGORY_STYLES[cats[0]] : DEFAULT_STYLE;
   const [showIframe, setShowIframe] = useState(false);
+
+  // --- Overscroll-to-close (touch + mouse) ---
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const overscrollStart = useRef<{ x: number; y: number; atTop: boolean; atBottom: boolean } | null>(null);
+
+  const captureStart = useCallback((x: number, y: number) => {
+    onInteraction();
+    const el = scrollRef.current;
+    if (!el) return;
+    const atTop = el.scrollTop <= 0;
+    const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 1;
+    overscrollStart.current = { x, y, atTop, atBottom };
+  }, [onInteraction]);
+
+  const captureEnd = useCallback((x: number, y: number) => {
+    if (!overscrollStart.current) return;
+    const start = overscrollStart.current;
+    overscrollStart.current = null;
+
+    const dx = x - start.x;
+    const dy = y - start.y;
+    const THRESHOLD = 60;
+
+    // Horizontal overscroll (always counts — no horizontal scroll)
+    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > THRESHOLD) {
+      onClose();
+      return;
+    }
+    // Vertical overscroll at edges
+    if (start.atTop && dy > THRESHOLD) {
+      onClose();
+      return;
+    }
+    if (start.atBottom && dy < -THRESHOLD) {
+      onClose();
+    }
+  }, [onClose]);
 
   const linkDomain = notice.link
     ? (() => {
@@ -588,11 +635,14 @@ function ExpandedTile({
 
       {/* Scrollable content */}
       <div
+        ref={scrollRef}
         className="relative z-10 flex-1 overflow-y-auto"
         style={{ padding: "3vh" }}
         onScroll={onInteraction}
-        onTouchStart={onInteraction}
-        onMouseDown={onInteraction}
+        onTouchStart={(e) => captureStart(e.touches[0].clientX, e.touches[0].clientY)}
+        onTouchEnd={(e) => captureEnd(e.changedTouches[0].clientX, e.changedTouches[0].clientY)}
+        onMouseDown={(e) => captureStart(e.clientX, e.clientY)}
+        onMouseUp={(e) => captureEnd(e.clientX, e.clientY)}
       >
         {/* Category badges */}
         {cats.length > 0 && (
