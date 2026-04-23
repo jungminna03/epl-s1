@@ -400,8 +400,8 @@ function GridTile({
       onClick={onClick}
       className="relative flex items-center cursor-pointer overflow-hidden rounded-[1.5vh]"
       style={{
-        background: "#1a2233",
-        border: `1px solid rgba(148,163,184,0.08)`,
+        background: "linear-gradient(#1a2233, #1a2233) padding-box, linear-gradient(135deg, rgba(34,211,238,0.35), rgba(96,165,250,0.25), rgba(167,139,250,0.35)) border-box",
+        border: "1px solid transparent",
         padding: "1.5vh 2.5vh 1.5vh 3vh",
         gap: "2vh",
         opacity: dimmed ? 0.3 : 1,
@@ -470,8 +470,14 @@ function GridTile({
         </span>
         {dbCount > 0 && (
           <span
-            className="flex items-center text-slate-500"
-            style={{ gap: "0.3vh", fontSize: "1.1vh" }}
+            className="flex items-center font-semibold"
+            style={{
+              gap: "0.3vh",
+              fontSize: "1.1vh",
+              background: "linear-gradient(90deg, #22d3ee, #60a5fa, #a78bfa)",
+              WebkitBackgroundClip: "text",
+              WebkitTextFillColor: "transparent",
+            }}
           >
             <span>✓</span>
             <span>{dbCount}</span>
