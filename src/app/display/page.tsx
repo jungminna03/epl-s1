@@ -591,7 +591,10 @@ function ExpandedTile({
     <motion.div
       layoutId={`tile-${notice.id}`}
       className="absolute inset-0 z-20 flex flex-col overflow-hidden rounded-[1.5vh]"
-      style={{ background: "#0f1219" }}
+      style={{
+        background: "linear-gradient(#0f1219, #0f1219) padding-box, linear-gradient(135deg, rgba(34,211,238,0.45), rgba(96,165,250,0.3), rgba(167,139,250,0.45)) border-box",
+        border: "1.5px solid transparent",
+      }}
       transition={SPRING_BOUNCY}
     >
       {/* Ambient glow */}
@@ -812,12 +815,16 @@ function CheckButton({
         style={{
           width: "3.5vh",
           height: "3.5vh",
-          background: "rgba(167,139,250,0.2)",
-          border: "1px solid rgba(167,139,250,0.3)",
+          background: "linear-gradient(rgba(167,139,250,0.15), rgba(167,139,250,0.15)) padding-box, linear-gradient(135deg, #22d3ee, #60a5fa, #a78bfa) border-box",
+          border: "1.5px solid transparent",
           fontSize: "1.8vh",
         }}
       >
-        ✓
+        <span style={{
+          background: "linear-gradient(90deg, #22d3ee, #60a5fa, #a78bfa)",
+          WebkitBackgroundClip: "text",
+          WebkitTextFillColor: "transparent",
+        }}>✓</span>
       </span>
       <div className="flex flex-col items-start" style={{ gap: "0.2vh" }}>
         <span
