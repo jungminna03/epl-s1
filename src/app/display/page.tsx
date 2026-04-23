@@ -623,16 +623,23 @@ function ExpandedTile({
         </svg>
       </button>
 
-      {/* Scrollable content */}
+      {/* Scrollable content with elastic overscroll */}
       <div
         ref={scrollRef}
-        className="relative z-10 flex-1 overflow-y-auto text-center flex flex-col justify-center"
-        style={{ padding: "3vh" }}
-        onScroll={onInteraction}
+        className="relative z-10 flex-1 overflow-hidden text-center flex flex-col"
         onTouchStart={(e) => captureStart(e.touches[0].clientX, e.touches[0].clientY)}
         onTouchEnd={(e) => captureEnd(e.changedTouches[0].clientX, e.changedTouches[0].clientY)}
         onMouseDown={(e) => captureStart(e.clientX, e.clientY)}
         onMouseUp={(e) => captureEnd(e.clientX, e.clientY)}
+      >
+      <motion.div
+        className="flex flex-col justify-center"
+        style={{ padding: "3vh", minHeight: "100%" }}
+        drag="y"
+        dragElastic={0.35}
+        dragConstraints={scrollRef}
+        dragTransition={{ bounceStiffness: 300, bounceDamping: 20 }}
+        onDrag={() => onInteraction()}
       >
         {/* Category badges */}
         {cats.length > 0 && (
@@ -719,6 +726,7 @@ function ExpandedTile({
 
         {/* Check button — big & tappable */}
         <CheckButton notice={notice} onInteraction={onInteraction} />
+      </motion.div>
       </div>
     </motion.div>
   );
