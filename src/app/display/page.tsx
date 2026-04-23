@@ -636,9 +636,9 @@ function ExpandedTile({
         className="flex flex-col justify-center"
         style={{ padding: "3vh", minHeight: "100%" }}
         drag="y"
-        dragElastic={0.35}
+        dragElastic={0.12}
         dragConstraints={scrollRef}
-        dragTransition={{ bounceStiffness: 300, bounceDamping: 20 }}
+        dragTransition={{ bounceStiffness: 600, bounceDamping: 30 }}
         onDrag={() => onInteraction()}
       >
         {/* Category badges */}
