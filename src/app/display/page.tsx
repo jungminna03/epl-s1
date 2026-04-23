@@ -205,14 +205,14 @@ function SignageLayout({ notices, now }: { notices: Notice[]; now: number }) {
           className="relative flex-1 min-h-0 overflow-hidden"
           style={{ padding: "1.5vh" }}
         >
-          {/* 2×2 Grid */}
+          {/* 1×4 Grid */}
           <AnimatePresence initial={false} mode="popLayout" custom={slideDirection.current}>
             <motion.div
               key={pageIdx}
               className="grid h-full"
               style={{
-                gridTemplateColumns: "1fr 1fr",
-                gridTemplateRows: "1fr 1fr",
+                gridTemplateColumns: "1fr",
+                gridTemplateRows: "repeat(4, 1fr)",
                 gap: "1.5vh",
               }}
               custom={slideDirection.current}
@@ -263,8 +263,8 @@ function SignageLayout({ notices, now }: { notices: Notice[]; now: number }) {
               <motion.div
                 className="absolute inset-0 grid pointer-events-none"
                 style={{
-                  gridTemplateColumns: "1fr 1fr",
-                  gridTemplateRows: "1fr 1fr",
+                  gridTemplateColumns: "1fr",
+                  gridTemplateRows: "repeat(4, 1fr)",
                   gap: "1.5vh",
                   padding: "1.5vh",
                   zIndex: 10,
@@ -398,11 +398,12 @@ function GridTile({
     <motion.div
       layoutId={`tile-${notice.id}`}
       onClick={onClick}
-      className="relative flex flex-col justify-center cursor-pointer overflow-hidden rounded-[1.5vh]"
+      className="relative flex items-center cursor-pointer overflow-hidden rounded-[1.5vh]"
       style={{
         background: "#1a2233",
         border: `1px solid rgba(148,163,184,0.08)`,
-        padding: "2vh 2vh 1.5vh 2.8vh",
+        padding: "1.5vh 2.5vh 1.5vh 3vh",
+        gap: "2vh",
         opacity: dimmed ? 0.3 : 1,
         transition: "opacity 0.2s",
       }}
@@ -414,22 +415,22 @@ function GridTile({
       <div
         className="absolute inset-y-0 left-0"
         style={{
-          width: "0.4vh",
+          width: "0.5vh",
           background: style.color,
           borderRadius: "1.5vh 0 0 1.5vh",
         }}
       />
 
-      {/* Category badges */}
+      {/* Category badge */}
       {cats.length > 0 && (
-        <div className="flex flex-wrap" style={{ gap: "0.5vh", marginBottom: "1vh" }}>
+        <div className="flex shrink-0 flex-col" style={{ gap: "0.4vh" }}>
           {cats.map((c) => {
             const cs = CATEGORY_STYLES[c];
             return (
               <span
                 key={c}
-                className={`inline-flex items-center rounded-full border font-bold ${cs.badge}`}
-                style={{ fontSize: "1.1vh", padding: "0.3vh 1vh" }}
+                className={`inline-flex items-center justify-center rounded-full border font-bold ${cs.badge}`}
+                style={{ fontSize: "1.2vh", padding: "0.3vh 1.2vh" }}
               >
                 {cs.label}
               </span>
@@ -438,50 +439,39 @@ function GridTile({
         </div>
       )}
 
-      {/* Title (2-line clamp) */}
-      <h3
-        className="font-extrabold text-slate-50 leading-[1.25]"
-        style={{
-          fontSize: "2.8vh",
-          letterSpacing: "-0.05vh",
-          display: "-webkit-box",
-          WebkitLineClamp: 2,
-          WebkitBoxOrient: "vertical",
-          overflow: "hidden",
-        }}
-      >
-        {notice.title}
-      </h3>
-
-      {/* Summary (2-line clamp) */}
-      {notice.content && (
-        <p
-          className="text-slate-400 leading-[1.5]"
+      {/* Title + summary */}
+      <div className="min-w-0 flex-1">
+        <h3
+          className="font-extrabold text-slate-50 leading-[1.25] truncate"
           style={{
-            fontSize: "1.3vh",
-            marginTop: "0.8vh",
-            display: "-webkit-box",
-            WebkitLineClamp: 2,
-            WebkitBoxOrient: "vertical",
-            overflow: "hidden",
+            fontSize: "2.4vh",
+            letterSpacing: "-0.03vh",
           }}
         >
-          {notice.content}
-        </p>
-      )}
+          {notice.title}
+        </h3>
+        {notice.content && (
+          <p
+            className="text-slate-400 leading-[1.4] truncate"
+            style={{
+              fontSize: "1.3vh",
+              marginTop: "0.4vh",
+            }}
+          >
+            {notice.content}
+          </p>
+        )}
+      </div>
 
-      {/* Bottom row: time + check count */}
-      <div
-        className="mt-auto flex items-center justify-between"
-        style={{ paddingTop: "1vh" }}
-      >
-        <span className="text-slate-600" style={{ fontSize: "1vh" }}>
+      {/* Right: time + check count */}
+      <div className="flex shrink-0 flex-col items-end" style={{ gap: "0.3vh" }}>
+        <span className="text-slate-600" style={{ fontSize: "1.1vh" }}>
           {formatRelative(notice.createdAt, now)}
         </span>
         {dbCount > 0 && (
           <span
             className="flex items-center text-slate-500"
-            style={{ gap: "0.3vh", fontSize: "1vh" }}
+            style={{ gap: "0.3vh", fontSize: "1.1vh" }}
           >
             <span>✓</span>
             <span>{dbCount}</span>
