@@ -155,6 +155,26 @@ function SignageLayout({ notices, now }: { notices: Notice[]; now: number }) {
     [],
   );
 
+  // --- Swipe to change page ---
+  const swipeStart = useRef<{ x: number; y: number } | null>(null);
+
+  const handlePointerDown = useCallback((x: number, y: number) => {
+    if (expandedId) return;
+    swipeStart.current = { x, y };
+  }, [expandedId]);
+
+  const handlePointerUp = useCallback((x: number) => {
+    if (!swipeStart.current || expandedId) return;
+    const dx = swipeStart.current.x - x;
+    swipeStart.current = null;
+    if (Math.abs(dx) < 50) return;
+    if (dx > 0 && pageIdx < totalPages - 1) {
+      setPageIdx((p) => p + 1);
+    } else if (dx < 0 && pageIdx > 0) {
+      setPageIdx((p) => p - 1);
+    }
+  }, [expandedId, pageIdx, totalPages]);
+
   // Current page of notices
   const pageNotices = notices.slice(pageIdx * PAGE_SIZE, pageIdx * PAGE_SIZE + PAGE_SIZE);
   const expandedNotice = expandedId
@@ -177,7 +197,14 @@ function SignageLayout({ notices, now }: { notices: Notice[]; now: number }) {
         <TopBar now={now} />
 
         {/* Content area: grid + overlay */}
-        <div className="relative flex-1 min-h-0" style={{ padding: "1.5vh" }}>
+        <div
+          className="relative flex-1 min-h-0"
+          style={{ padding: "1.5vh" }}
+          onTouchStart={(e) => handlePointerDown(e.touches[0].clientX, e.touches[0].clientY)}
+          onTouchEnd={(e) => handlePointerUp(e.changedTouches[0].clientX)}
+          onMouseDown={(e) => handlePointerDown(e.clientX, e.clientY)}
+          onMouseUp={(e) => handlePointerUp(e.clientX)}
+        >
           {/* 2×2 Grid */}
           <AnimatePresence mode="wait">
             <motion.div
