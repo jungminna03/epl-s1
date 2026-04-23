@@ -811,20 +811,16 @@ function CheckButton({
       }}
     >
       <span
-        className="flex items-center justify-center rounded-full"
+        className="flex items-center justify-center rounded-full font-bold text-white"
         style={{
           width: "3.5vh",
           height: "3.5vh",
-          background: "linear-gradient(rgba(167,139,250,0.15), rgba(167,139,250,0.15)) padding-box, linear-gradient(135deg, #22d3ee, #60a5fa, #a78bfa) border-box",
-          border: "1.5px solid transparent",
+          background: "linear-gradient(135deg, #22d3ee, #60a5fa, #a78bfa)",
           fontSize: "1.8vh",
+          boxShadow: "0 0 1.5vh rgba(96,165,250,0.3)",
         }}
       >
-        <span style={{
-          background: "linear-gradient(90deg, #22d3ee, #60a5fa, #a78bfa)",
-          WebkitBackgroundClip: "text",
-          WebkitTextFillColor: "transparent",
-        }}>✓</span>
+        ✓
       </span>
       <div className="flex flex-col items-start" style={{ gap: "0.2vh" }}>
         <span
