@@ -18,6 +18,7 @@ const RETURN_MS = 60_000;
 const PAGE_SIZE = 4;
 
 const SPRING = { type: "spring" as const, stiffness: 200, damping: 25 };
+const SPRING_BOUNCY = { type: "spring" as const, stiffness: 300, damping: 18, mass: 0.8 };
 
 function getCheckCount(notice: Notice): number {
   return (notice as Notice & { checkCount?: number }).checkCount ?? 0;
@@ -585,7 +586,7 @@ function ExpandedTile({
       layoutId={`tile-${notice.id}`}
       className="absolute inset-0 z-20 flex flex-col overflow-hidden rounded-[1.5vh]"
       style={{ background: "#0f1219" }}
-      transition={SPRING}
+      transition={SPRING_BOUNCY}
     >
       {/* Ambient glow */}
       <div
@@ -622,11 +623,15 @@ function ExpandedTile({
         </svg>
       </button>
 
-      {/* Scrollable content */}
-      <div
+      {/* Scrollable content — elastic scale on enter/exit */}
+      <motion.div
         ref={scrollRef}
         className="relative z-10 flex-1 overflow-y-auto text-center flex flex-col justify-center"
-        style={{ padding: "3vh" }}
+        style={{ padding: "3vh", transformOrigin: "center center" }}
+        initial={{ opacity: 0, scale: 0.92 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.92 }}
+        transition={{ ...SPRING_BOUNCY, opacity: { duration: 0.2 } }}
         onScroll={onInteraction}
         onTouchStart={(e) => captureStart(e.touches[0].clientX, e.touches[0].clientY)}
         onTouchEnd={(e) => captureEnd(e.changedTouches[0].clientX, e.changedTouches[0].clientY)}
@@ -718,7 +723,7 @@ function ExpandedTile({
 
         {/* Check button — big & tappable */}
         <CheckButton notice={notice} onInteraction={onInteraction} />
-      </div>
+      </motion.div>
     </motion.div>
   );
 }
