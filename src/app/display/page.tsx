@@ -633,10 +633,12 @@ function ExpandedTile({
         onMouseUp={(e) => captureEnd(e.clientX, e.clientY)}
       >
       <motion.div
+        key={notice.id}
         className="flex flex-col justify-center"
-        style={{ padding: "3vh", minHeight: "100%" }}
+        style={{ padding: "3vh", minHeight: "100%", y: 0 }}
         drag="y"
         dragElastic={0.12}
+        dragSnapToOrigin
         dragConstraints={scrollRef}
         dragTransition={{ bounceStiffness: 600, bounceDamping: 30 }}
         onDrag={() => onInteraction()}
