@@ -48,3 +48,10 @@ next-env.d.ts
 .superpowers/
 
 .vercel
+
+# Electron
+/dist-electron/
+/release/
+
+# 자동 업데이트 산출물 — Vercel 배포에는 포함되지만 git에는 커밋하지 않음.
+/public/updates/

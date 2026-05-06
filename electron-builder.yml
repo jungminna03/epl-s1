@@ -1,0 +1,42 @@
+appId: app.epl.signage
+productName: EPL 공지사항
+copyright: Copyright © 2026 Emotive Play
+
+directories:
+  output: release
+  buildResources: electron-resources
+
+# 패키지에 들어가는 것 — 컴파일된 main/preload만.
+files:
+  - dist-electron/**/*
+  - package.json
+
+# 위젯은 원격 URL을 로드하므로 Next.js 산출물(.next)은 번들에 포함하지 않음.
+
+asar: true
+compression: maximum
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: electron-resources/icon.ico
+  artifactName: EPL-공지사항-Setup-${version}.${ext}
+  # 코드 서명은 일단 비활성. 인증서 받으면 certificateFile/Password 추가.
+
+nsis:
+  oneClick: true
+  perMachine: false
+  allowToChangeInstallationDirectory: false
+  runAfterFinish: true
+  deleteAppDataOnUninstall: true
+  shortcutName: EPL 공지사항
+  installerIcon: electron-resources/icon.ico
+  uninstallerIcon: electron-resources/icon.ico
+
+# 자동 업데이트 — Vercel 정적 호스팅을 generic provider로 사용.
+publish:
+  - provider: generic
+    url: https://epl-s1.vercel.app/updates
+    channel: latest

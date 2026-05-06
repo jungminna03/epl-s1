@@ -1,0 +1,23 @@
+# Vercel CLI 업로드 시 제외할 항목.
+# .gitignore와 달리 /public/updates/ 는 제외하지 않는다 — 자동 업데이트 매니페스트와
+# 인스톨러를 Vercel 정적 호스팅에 그대로 올려야 하기 때문.
+
+node_modules
+.next
+out
+release
+dist-electron
+
+.env
+.env.local
+.env*.local
+
+.vercel
+.superpowers
+.git
+
+*.tsbuildinfo
+next-env.d.ts
+.DS_Store
+*.pem
+*-debug.log*
