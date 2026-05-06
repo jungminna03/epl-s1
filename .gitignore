@@ -53,5 +53,5 @@ next-env.d.ts
 /dist-electron/
 /release/
 
-# 자동 업데이트 산출물 — Vercel 배포에는 포함되지만 git에는 커밋하지 않음.
-/public/updates/
+# Vercel env pull 임시 파일 (BLOB_READ_WRITE_TOKEN 포함)
+.env.vercel.tmp

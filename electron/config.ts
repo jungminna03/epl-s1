@@ -8,8 +8,9 @@ export const APP_CONFIG = {
   widgetUrl: isDev
     ? "http://localhost:3000/widget"
     : "https://epl-s1.vercel.app/widget",
-  /** 자동 업데이트 매니페스트 호스트 (electron-updater generic provider). */
-  updateFeedUrl: "https://epl-s1.vercel.app/updates",
+  /** 자동 업데이트 매니페스트 호스트 (electron-updater generic provider).
+   *  Vercel Blob Storage — 인스톨러가 100MB를 넘어 정적 호스팅 불가, Blob 사용. */
+  updateFeedUrl: "https://m3vzlavafd1gvxn2.public.blob.vercel-storage.com",
   /** 자동 업데이트 폴링 주기 (ms). */
   updateIntervalMs: 30 * 60 * 1000,
   /** 위젯 초기 크기. */

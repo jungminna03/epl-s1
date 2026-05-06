@@ -1,6 +1,6 @@
 # Vercel CLI 업로드 시 제외할 항목.
-# .gitignore와 달리 /public/updates/ 는 제외하지 않는다 — 자동 업데이트 매니페스트와
-# 인스톨러를 Vercel 정적 호스팅에 그대로 올려야 하기 때문.
+# 자동 업데이트 인스톨러는 Vercel 정적 호스팅이 아니라 Vercel Blob Storage 로 업로드하므로
+# (정적 파일 100MB 제한 회피) 별도 폴더 예외처리는 필요 없음.
 
 node_modules
 .next
@@ -11,6 +11,7 @@ dist-electron
 .env
 .env.local
 .env*.local
+.env.vercel.tmp
 
 .vercel
 .superpowers

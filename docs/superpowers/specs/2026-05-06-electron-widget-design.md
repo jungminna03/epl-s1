@@ -48,16 +48,30 @@ epl-s1/
 └── dist-electron/, release/ (gitignored)
 ```
 
-## 자동 업데이트 호스팅 — Vercel 정적 서빙
+## 자동 업데이트 호스팅 — Vercel Blob Storage
 
-`electron-updater` 의 `generic` provider 가 가장 단순:
+처음엔 Vercel 정적 호스팅(`public/updates/`)으로 시도했으나 **정적 파일 100MB 제한**에 막힘 (Electron 인스톨러는 ~156MB). 같은 Vercel 생태계 내 우회: **Vercel Blob Storage** (파일 사이즈 제한 사실상 없음).
 
-- 빌드 산출물(`*.exe`, `*.exe.blockmap`, `latest.yml`)을 `public/updates/` 로 복사
-- `npm run release` 가 빌드 + 복사 + `vercel --prod` 까지 한 번에 실행
-- `public/updates/` 는 .gitignore — 80MB 바이너리가 git에 들어가지 않음
-- 결과 URL: `https://epl-s1.vercel.app/updates/latest.yml`
+- Blob 스토어: `epl-updates3` (store_M3VZLAVaFd1GVXn2) — 프로젝트에 연결됨
+- 공개 URL prefix: `https://m3vzlavafd1gvxn2.public.blob.vercel-storage.com`
+- `npm run release` 가:
+  1. electron-builder 로 인스톨러 빌드
+  2. `@vercel/blob` 의 `put()` 으로 latest.yml + .exe + .blockmap 업로드 (`addRandomSuffix: false`, `allowOverwrite: true` 로 안정 URL)
+  3. `vercel --prod` 호출 → /widget 페이지 등 웹 콘텐츠 배포
+- 결과 매니페스트: `https://m3vzlavafd1gvxn2.public.blob.vercel-storage.com/latest.yml`
 
-위젯이 부팅 시 매니페스트를 가져와 새 버전 발견하면 백그라운드 다운로드 → 다음 종료 시 설치.
+위젯이 부팅 시 매니페스트 폴링 → 새 버전 발견 시 백그라운드 다운로드 → 다음 종료 시 자동 설치.
+
+### BLOB_READ_WRITE_TOKEN 발급 (1회)
+
+Blob 스토어가 프로젝트에 연결되면 `BLOB_READ_WRITE_TOKEN` 환경 변수가 Production/Preview 에 자동 등록됨. 로컬에서 release 실행 시:
+
+```powershell
+npx vercel env pull .env.vercel.tmp --environment=production
+npm run release
+```
+
+`.env.vercel.tmp` 는 .gitignore + .vercelignore 둘 다에 등록 (토큰 유출 방지).
 
 ## 사용자 흐름
 

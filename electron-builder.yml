@@ -35,8 +35,9 @@ nsis:
   installerIcon: electron-resources/icon.ico
   uninstallerIcon: electron-resources/icon.ico
 
-# 자동 업데이트 — Vercel 정적 호스팅을 generic provider로 사용.
+# 자동 업데이트 — Vercel Blob Storage 를 generic provider 로 사용.
+# (Vercel 정적 파일은 100MB 제한이 있어 156MB 인스톨러를 못 받음 → Blob 사용)
 publish:
   - provider: generic
-    url: https://epl-s1.vercel.app/updates
+    url: https://m3vzlavafd1gvxn2.public.blob.vercel-storage.com
     channel: latest
