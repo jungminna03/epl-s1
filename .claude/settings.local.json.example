@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "_comment": "이 파일은 템플릿입니다. 'settings.local.json' 으로 복사한 뒤 본인이 쓰는 플러그인/마켓플레이스만 추가하세요. settings.local.json 은 .gitignore 처리되어 커밋되지 않습니다.",
+
+  "_example_extraKnownMarketplaces": {
+    "my-marketplace": {
+      "source": { "source": "github", "repo": "your-org/your-plugins" }
+    }
+  },
+
+  "_example_enabledPlugins": [
+    "my-tool@my-marketplace"
+  ],
+
+  "extraKnownMarketplaces": {},
+  "enabledPlugins": []
+}

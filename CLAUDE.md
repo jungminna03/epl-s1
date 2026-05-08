@@ -1,1 +1,24 @@
-@AGENTS.md
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
+
+# 문서 위치 규칙
+
+- 모든 프로젝트 문서(스펙, 설계, 회의록, 분석, 가이드 등)는 **`docs/`** 폴더 아래에 둔다. 루트나 `src/` 에 흩뿌리지 말 것.
+- 하위 분류 예: `docs/specs/`, `docs/design/`, `docs/guides/`, `docs/superpowers/`.
+- 새 문서를 만들 땐 먼저 `docs/` 안에 적절한 하위 폴더가 있는지 확인하고, 없으면 만든 뒤 그 안에 둔다.
+- `README.md`, `CLAUDE.md` 처럼 도구가 루트에서 읽는 표준 파일만 예외다.
+
+# Claude Code 플러그인 협업 규칙
+
+이 저장소는 Claude Code 로 협업한다. 플러그인 설정은 두 단계로 분리한다.
+
+| 파일 | 용도 | git |
+| --- | --- | --- |
+| `.claude/settings.json` | **팀 공통** 플러그인 / 마켓플레이스 / 권한 | 커밋 |
+| `.claude/settings.local.json` | **개인** 플러그인 및 로컬 오버라이드 | gitignore (커밋 X) |
+
+- 팀 전체가 써야 하는 플러그인은 `.claude/settings.json` 의 `extraKnownMarketplaces` 와 `enabledPlugins` 에 추가하고 PR 로 합의한다.
+- 본인만 쓰는 플러그인은 `.claude/settings.local.json.example` 을 `settings.local.json` 으로 복사해서 거기에 추가한다. 이 파일은 `.gitignore` 에 의해 커밋되지 않는다.
+- 키 우선순위: `settings.local.json` > `settings.json` > `~/.claude/settings.json`. 충돌 시 로컬이 이긴다.
+- 활성 플러그인 확인: `/plugin` 또는 `/status`.

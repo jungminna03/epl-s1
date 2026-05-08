@@ -47,6 +47,16 @@ next-env.d.ts
 # Superpowers
 .superpowers/
 
+# Claude Code - 개인 설정/상태는 무시, 팀 공통 settings.json 은 커밋
+.claude/settings.local.json
+.claude/state.json
+.claude/projects/
+.claude/cache/
+.claude/history.jsonl
+
+# Next.js 가 postinstall 때 재생성하지만 우리는 CLAUDE.md 를 사용하므로 무시
+AGENTS.md
+
 .vercel
 
 # Electron

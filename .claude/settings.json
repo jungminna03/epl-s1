@@ -1,0 +1,8 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "_comment": "epl-s1 팀 공통 Claude Code 설정. 이 파일은 git에 커밋합니다. 개인 플러그인/오버라이드는 .claude/settings.local.json 에 작성하세요.",
+
+  "extraKnownMarketplaces": {},
+
+  "enabledPlugins": []
+}
