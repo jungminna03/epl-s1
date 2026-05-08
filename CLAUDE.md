@@ -22,3 +22,21 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - 본인만 쓰는 플러그인은 `.claude/settings.local.json.example` 을 `settings.local.json` 으로 복사해서 거기에 추가한다. 이 파일은 `.gitignore` 에 의해 커밋되지 않는다.
 - 키 우선순위: `settings.local.json` > `settings.json` > `~/.claude/settings.json`. 충돌 시 로컬이 이긴다.
 - 활성 플러그인 확인: `/plugin` 또는 `/status`.
+
+# 커밋 / 브랜치 컨벤션
+
+- **커밋 메시지**: [Conventional Commits](https://www.conventionalcommits.org/) 형식. `<type>(<scope>): <설명>` (한글 OK)
+  - 타입: `feat`, `fix`, `chore`, `docs`, `refactor`, `test`, `build`, `ci`, `style`, `perf`
+  - 예: `feat(notice): 공지 자동 회전 기능 추가`, `fix(electron): 자동 업데이트 오류 수정`
+- **브랜치 이름**: `<type>/<짧은-설명>` (kebab-case)
+  - 예: `feat/notice-rotation`, `fix/auto-update-bug`
+- **PR 머지 전 필수**: 빌드(`npm run build`) 와 타입체크(`npx tsc --noEmit`) 통과.
+- **금지**: `master` / `main` 직접 푸시, force push, `--no-verify` 로 훅 우회.
+
+# MCP 서버 협업 규칙
+
+| 파일 | 용도 | git |
+| --- | --- | --- |
+| `.mcp.json` | 팀 공통 MCP 서버 | 커밋 |
+| `.mcp.local.json` | 개인 MCP 오버라이드 | gitignore |
+| `~/.claude.json` | 본인 글로벌 MCP (모든 프로젝트) | 저장소 밖 |

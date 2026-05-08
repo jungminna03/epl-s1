@@ -24,6 +24,14 @@ function getCheckCount(notice: Notice): number {
   return (notice as Notice & { checkCount?: number }).checkCount ?? 0;
 }
 
+function openExternal(url: string) {
+  // Electron 앱에서는 시스템 기본 브라우저(크롬)로 띄움; 웹에선 새 탭.
+  const epl = (window as Window & { epl?: { openExternal: (u: string) => void } })
+    .epl;
+  if (epl?.openExternal) epl.openExternal(url);
+  else window.open(url, "_blank", "noopener,noreferrer");
+}
+
 /* ─── Data Fetching (default export) ─── */
 
 export default function DisplayPage() {
@@ -503,7 +511,6 @@ function ExpandedTile({
 }) {
   const cats = parseCategories(notice.category);
   const style = cats.length > 0 ? CATEGORY_STYLES[cats[0]] : DEFAULT_STYLE;
-  const [showIframe, setShowIframe] = useState(false);
 
   // --- Overscroll-to-close (touch + mouse) ---
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -551,41 +558,6 @@ function ExpandedTile({
         }
       })()
     : null;
-
-  // iframe mode
-  if (showIframe && notice.link) {
-    return (
-      <motion.div
-        layoutId={`tile-${notice.id}`}
-        className="absolute inset-0 z-20 flex flex-col overflow-hidden rounded-[1.5vh]"
-        style={{ background: "#0f1219" }}
-        transition={SPRING}
-      >
-        {/* Back bar */}
-        <button
-          onClick={() => {
-            setShowIframe(false);
-            onInteraction();
-          }}
-          className="flex shrink-0 items-center border-b bg-[#1a2233] text-slate-400 transition-colors hover:text-slate-200"
-          style={{
-            borderColor: "rgba(34,211,238,0.06)",
-            padding: "1vh 2vh",
-            gap: "0.5vh",
-            fontSize: "1.2vh",
-          }}
-        >
-          <span style={{ fontSize: "1.4vh" }}>←</span>
-          공지로 돌아가기
-        </button>
-        <iframe
-          src={notice.link}
-          className="flex-1 bg-white"
-          style={{ border: "none", width: "100%", height: "100%" }}
-        />
-      </motion.div>
-    );
-  }
 
   return (
     <motion.div
@@ -699,7 +671,7 @@ function ExpandedTile({
         {notice.link && (
           <button
             onClick={() => {
-              setShowIframe(true);
+              if (notice.link) openExternal(notice.link);
               onInteraction();
             }}
             className="flex w-full items-center rounded-[0.8vh] border border-slate-700/60 bg-[#1e293b] transition-all hover:border-cyan-400/30 hover:bg-[#243044]"

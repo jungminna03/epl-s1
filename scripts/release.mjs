@@ -12,7 +12,7 @@
  *   - electron:release → release/EPL-공지사항-Setup-x.y.z.exe + latest.yml 생성
  *   - 산출물 3종(latest.yml, *.exe, *.exe.blockmap)을 Vercel Blob 에 업로드
  *     → https://m3vzlavafd1gvxn2.public.blob.vercel-storage.com/<filename>
- *   - vercel --prod 호출 → /widget 페이지 등 웹 콘텐츠 배포
+ *   - vercel --prod 호출 → /display 페이지 등 웹 콘텐츠 배포
  *
  * 결과:
  *   - 학교 PC들은 30분 이내에 Blob의 latest.yml 폴링 → 새 버전 발견 → 백그라운드 다운로드
@@ -104,4 +104,4 @@ run("npx", ["vercel", "--prod", "--yes"]);
 
 console.log("\n✓ 완료.");
 console.log("   매니페스트: https://m3vzlavafd1gvxn2.public.blob.vercel-storage.com/latest.yml");
-console.log("   웹: https://epl-s1.vercel.app/widget");
+console.log("   웹: https://epl-s1.vercel.app/display");

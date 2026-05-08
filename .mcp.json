@@ -1,0 +1,5 @@
+{
+  "$schema": "https://json.schemastore.org/mcp.json",
+  "_comment": "epl-s1 팀 공통 MCP 서버. 이 파일은 git에 커밋합니다. 개인 MCP 서버는 ~/.claude.json (글로벌) 또는 .mcp.local.json (프로젝트 로컬, gitignore) 에 작성하세요.",
+  "mcpServers": {}
+}

@@ -15,13 +15,6 @@ body {
   color: var(--color-foreground);
 }
 
-/* 위젯 모드: Electron transparent BrowserWindow 위에 둥근 카드만 떠 있도록
-   body 배경을 투명으로 덮어쓴다. /widget 페이지가 mount 시 클래스 토글. */
-body.widget-mode,
-body.widget-mode html {
-  background: transparent !important;
-}
-
 /* 디스플레이 모드용: 디스플레이 페이지에서는 스크롤바를 숨겨 사이니지 느낌을 살린다 */
 .signage-hide-scrollbar::-webkit-scrollbar {
   display: none;

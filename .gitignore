@@ -57,6 +57,9 @@ next-env.d.ts
 # Next.js 가 postinstall 때 재생성하지만 우리는 CLAUDE.md 를 사용하므로 무시
 AGENTS.md
 
+# 개인 MCP 서버 설정 (팀 공통은 .mcp.json 에 커밋)
+.mcp.local.json
+
 .vercel
 
 # Electron

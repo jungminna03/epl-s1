@@ -4,5 +4,41 @@
 
   "extraKnownMarketplaces": {},
 
-  "enabledPlugins": []
+  "enabledPlugins": {},
+
+  "permissions": {
+    "_comment": "team baseline. 너무 좁히지 말고, 명백히 위험한 것만 deny. 개인이 더 풀고 싶으면 settings.local.json 에서 allow 추가.",
+    "allow": [
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git branch:*)",
+      "Bash(git show:*)",
+      "Bash(git fetch:*)",
+      "Bash(git stash:*)",
+      "Bash(git restore:*)",
+      "Bash(git switch:*)",
+      "Bash(git checkout:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git rm:*)",
+      "Bash(npm install)",
+      "Bash(npm ci)",
+      "Bash(npm run *)",
+      "Bash(npm test)",
+      "Bash(npx tsc:*)",
+      "Bash(npx next:*)",
+      "Bash(npx eslint:*)",
+      "Bash(npx prettier:*)"
+    ],
+    "deny": [
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)",
+      "Bash(git push --force-with-lease origin master:*)",
+      "Bash(git push --force-with-lease origin main:*)",
+      "Bash(git reset --hard:*)",
+      "Bash(git clean -fdx:*)",
+      "Bash(git branch -D *)"
+    ]
+  }
 }
