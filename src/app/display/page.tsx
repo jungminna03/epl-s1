@@ -32,6 +32,15 @@ function openExternal(url: string) {
   else window.open(url, "_blank", "noopener,noreferrer");
 }
 
+type EplApi = {
+  setAlwaysOnTop?: (value: boolean) => void;
+};
+
+function getEpl(): EplApi | undefined {
+  if (typeof window === "undefined") return undefined;
+  return (window as Window & { epl?: EplApi }).epl;
+}
+
 /* ─── Data Fetching (default export) ─── */
 
 export default function DisplayPage() {
@@ -195,17 +204,15 @@ function SignageLayout({ notices, now }: { notices: Notice[]; now: number }) {
 
   return (
     <div
-      className="flex items-center justify-center overflow-hidden bg-[#0f1219]"
+      className="overflow-hidden bg-[#0f1219]"
       style={{ width: "100vw", height: "100vh" }}
     >
-      {/* 1:1 square container */}
+      {/* Fill window — 위젯/사이니지 양쪽에서 빈 여백 없이 꽉 채움 */}
       <div
         className="relative flex flex-col"
-        style={{
-          width: "min(100vw, 100vh)",
-          height: "min(100vw, 100vh)",
-        }}
+        style={{ width: "100%", height: "100%" }}
       >
+        <PinToggle />
         <TopBar now={now} />
 
         {/* Content area: grid + overlay */}
@@ -318,6 +325,71 @@ function SignageLayout({ notices, now }: { notices: Notice[]; now: number }) {
         )}
       </div>
     </div>
+  );
+}
+
+/* ─── Pin (always-on-top) Toggle ─── */
+
+function PinToggle() {
+  // Electron 환경에서만 노출 — 웹에선 toggle 의미 없음.
+  const [available, setAvailable] = useState(false);
+  const [pinned, setPinned] = useState(true); // 위젯 시작 시 always-on-top.
+
+  useEffect(() => {
+    setAvailable(!!getEpl()?.setAlwaysOnTop);
+  }, []);
+
+  if (!available) return null;
+
+  const togglePinned = () => {
+    const next = !pinned;
+    setPinned(next);
+    getEpl()?.setAlwaysOnTop?.(next);
+  };
+
+  return (
+    <button
+      onClick={togglePinned}
+      title={pinned ? "맨 뒤 레이어로 보내기" : "맨 앞 레이어로 가져오기"}
+      className="absolute flex items-center justify-center rounded-full transition-opacity hover:opacity-100"
+      style={{
+        top: "1.2vh",
+        right: "1.2vh",
+        width: "3.6vh",
+        height: "3.6vh",
+        zIndex: 40,
+        background: "rgba(248,250,252,0.06)",
+        border: "1px solid rgba(248,250,252,0.12)",
+        backdropFilter: "blur(4px)",
+        WebkitBackdropFilter: "blur(4px)",
+        opacity: pinned ? 0.55 : 0.9,
+      }}
+    >
+      <svg
+        width="50%"
+        height="50%"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke={pinned ? "rgba(226,232,240,0.85)" : "rgba(34,211,238,0.95)"}
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        {pinned ? (
+          // 맨 앞 상태: 아래로 보내기 화살표 (스택 + ↓)
+          <>
+            <rect x="4" y="4" width="12" height="12" rx="1" />
+            <path d="M20 10 v9 M20 19 l-3 -3 M20 19 l3 -3" />
+          </>
+        ) : (
+          // 맨 뒤 상태: 위로 가져오기 화살표 (스택 + ↑)
+          <>
+            <rect x="8" y="8" width="12" height="12" rx="1" />
+            <path d="M4 14 v-9 M4 5 l-3 3 M4 5 l3 3" />
+          </>
+        )}
+      </svg>
+    </button>
   );
 }
 
