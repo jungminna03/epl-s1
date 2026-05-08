@@ -26,6 +26,7 @@ import { resolve, join, basename } from "node:path";
 
 const ROOT = resolve(import.meta.dirname, "..");
 const RELEASE_DIR = join(ROOT, "release");
+const WIDGET_CONFIG_PATH = join(ROOT, "widget-config.json");
 
 function getBlobToken() {
   if (process.env.BLOB_READ_WRITE_TOKEN) return process.env.BLOB_READ_WRITE_TOKEN;
@@ -99,9 +100,29 @@ for (const f of targets) {
   console.log(`    → ${blob.url}`);
 }
 
+// widget-config.json 도 Blob 에 같이 올린다 — 위젯 부트스트랩이 이걸 읽음.
+// 인스톨러 박힌 bootstrapUrl 을 절대 못 바꾸므로, 이 JSON 이 운영 컨트롤 패널 역할.
+if (existsSync(WIDGET_CONFIG_PATH)) {
+  const data = readFileSync(WIDGET_CONFIG_PATH);
+  console.log(`  • widget-config.json (${data.length} B) ...`);
+  const blob = await put("widget-config.json", data, {
+    token,
+    access: "public",
+    addRandomSuffix: false,
+    allowOverwrite: true,
+    contentType: "application/json",
+    // 짧게 캐시 — 킬스위치/긴급 변경이 빨리 전파되도록.
+    cacheControlMaxAge: 60,
+  });
+  console.log(`    → ${blob.url}`);
+} else {
+  console.warn(`! widget-config.json 이 없어서 업로드 스킵 — ${WIDGET_CONFIG_PATH}`);
+}
+
 console.log("\n▶ Vercel 웹 배포 (vercel --prod)");
 run("npx", ["vercel", "--prod", "--yes"]);
 
 console.log("\n✓ 완료.");
 console.log("   매니페스트: https://m3vzlavafd1gvxn2.public.blob.vercel-storage.com/latest.yml");
+console.log("   부트스트랩: https://m3vzlavafd1gvxn2.public.blob.vercel-storage.com/widget-config.json");
 console.log("   웹: https://epl-s1.vercel.app/display");

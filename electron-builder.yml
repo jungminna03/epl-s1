@@ -13,6 +13,11 @@ files:
 
 # 위젯은 원격 URL을 로드하므로 Next.js 산출물(.next)은 번들에 포함하지 않음.
 
+# resources/ 로 카피되는 것 — runtime 에 process.resourcesPath 로 접근.
+extraResources:
+  - from: electron-resources/icon.ico
+    to: icon.ico
+
 asar: true
 compression: maximum
 

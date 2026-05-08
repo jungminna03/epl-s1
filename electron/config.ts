@@ -21,4 +21,7 @@ export const APP_CONFIG = {
     marginRight: 24,
     marginBottom: 24,
   },
+  /** 부트스트랩 URL — TODO: 다음 빌드부터는 이 URL 만 박히고 나머지는 원격 JSON 으로 빠짐 */
+  bootstrapUrl:
+    "https://m3vzlavafd1gvxn2.public.blob.vercel-storage.com/widget-config.json",
 } as const;
