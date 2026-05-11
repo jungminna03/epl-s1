@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { motion } from "framer-motion";
 import { db, type Notice } from "@/lib/instant";
 import { isNoticeVisible } from "@/lib/categories";
 
@@ -170,6 +171,95 @@ function openDisplay() {
   }
 }
 
+/* ─── Marquee Title ─── */
+
+const MARQUEE_SPEED_PX_PER_S = 30;
+const MARQUEE_GAP_VH = 4; // 텍스트 2회 반복 사이 간격
+
+function MarqueeTitle({ text }: { text: string }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const textRef = useRef<HTMLSpanElement>(null);
+  const [overflowPx, setOverflowPx] = useState(0);
+
+  // 폭 측정 — text/font 가 바뀔 때마다 다시
+  useLayoutEffect(() => {
+    function measure() {
+      const c = containerRef.current;
+      const t = textRef.current;
+      if (!c || !t) return;
+      const containerWidth = c.clientWidth;
+      const textWidth = t.scrollWidth;
+      setOverflowPx(Math.max(0, textWidth - containerWidth));
+    }
+    measure();
+    // 위젯 창 크기 변경/줌 변경에 대응
+    const ro = new ResizeObserver(measure);
+    if (containerRef.current) ro.observe(containerRef.current);
+    return () => ro.disconnect();
+  }, [text]);
+
+  const isOverflow = overflowPx > 0;
+
+  if (!isOverflow) {
+    return (
+      <div ref={containerRef} className="min-w-0 flex-1">
+        <span
+          ref={textRef}
+          className="block truncate font-extrabold text-white leading-[1.15]"
+          style={{
+            fontSize: "3.4vh",
+            letterSpacing: "-0.05vh",
+          }}
+        >
+          {text}
+        </span>
+      </div>
+    );
+  }
+
+  // 한 사이클 거리 = 첫 텍스트 분량만 흐르고 잠시 멈춤
+  const cycleDistance = overflowPx + 16;
+  const duration = cycleDistance / MARQUEE_SPEED_PX_PER_S;
+
+  return (
+    <div ref={containerRef} className="relative min-w-0 flex-1 overflow-hidden">
+      <motion.div
+        className="flex shrink-0"
+        style={{ gap: `${MARQUEE_GAP_VH}vh`, width: "max-content" }}
+        animate={{ x: [0, -cycleDistance] }}
+        transition={{
+          duration,
+          ease: "linear",
+          repeat: Infinity,
+          repeatType: "loop",
+          repeatDelay: 1,
+        }}
+      >
+        <span
+          ref={textRef}
+          className="block whitespace-nowrap font-extrabold text-white leading-[1.15]"
+          style={{
+            fontSize: "3.4vh",
+            letterSpacing: "-0.05vh",
+          }}
+        >
+          {text}
+        </span>
+        <span
+          aria-hidden
+          className="block whitespace-nowrap font-extrabold text-white leading-[1.15]"
+          style={{
+            fontSize: "3.4vh",
+            letterSpacing: "-0.05vh",
+          }}
+        >
+          {text}
+        </span>
+      </motion.div>
+    </div>
+  );
+}
+
 /* ─── Notice Card ─── */
 
 function NoticeCard({ notice }: { notice: Notice }) {
@@ -183,15 +273,7 @@ function NoticeCard({ notice }: { notice: Notice }) {
         padding: "0 2.5vh",
       }}
     >
-      <h3
-        className="font-extrabold text-white leading-[1.15] truncate"
-        style={{
-          fontSize: "3.4vh",
-          letterSpacing: "-0.05vh",
-        }}
-      >
-        {notice.title}
-      </h3>
+      <MarqueeTitle text={notice.title} />
     </button>
   );
 }
