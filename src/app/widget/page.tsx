@@ -155,12 +155,29 @@ function NoticeGrid({ notices }: { notices: Notice[] }) {
   );
 }
 
+/* ─── External Display Opener ─── */
+
+function openDisplay() {
+  if (typeof window === "undefined") return;
+  const url = `${window.location.origin}/display`;
+  const epl = (
+    window as Window & { epl?: { openExternal: (u: string) => void } }
+  ).epl;
+  if (epl?.openExternal) {
+    epl.openExternal(url);
+  } else {
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
+}
+
 /* ─── Notice Card ─── */
 
 function NoticeCard({ notice }: { notice: Notice }) {
   return (
-    <div
-      className="relative flex items-center overflow-hidden rounded-[1.8vh]"
+    <button
+      type="button"
+      onClick={() => openDisplay()}
+      className="relative flex w-full items-center overflow-hidden rounded-[1.8vh] text-left transition-transform active:scale-[0.99]"
       style={{
         background: "#4a4d55",
         padding: "0 2.5vh",
@@ -175,7 +192,7 @@ function NoticeCard({ notice }: { notice: Notice }) {
       >
         {notice.title}
       </h3>
-    </div>
+    </button>
   );
 }
 
