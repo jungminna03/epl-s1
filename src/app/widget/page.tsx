@@ -104,11 +104,60 @@ function WidgetHeader({ now }: { now: number }) {
   );
 }
 
-/* ─── Notice Grid (slots only, no cards yet) ─── */
+/* ─── Notice Grid ─── */
 
-function NoticeGrid({ notices: _notices }: { notices: Notice[] }) {
-  // Task 3 에서 NoticeCard 채움. 여기선 일단 빈 슬롯 4개.
-  return <EmptySlots />;
+const PAGE_SIZE = 4;
+
+function NoticeGrid({ notices }: { notices: Notice[] }) {
+  const pageNotices = notices.slice(0, PAGE_SIZE);
+
+  return (
+    <div
+      className="grid flex-1 min-h-0"
+      style={{
+        gridTemplateRows: "repeat(4, 1fr)",
+        gap: "1.2vh",
+      }}
+    >
+      {Array.from({ length: PAGE_SIZE }).map((_, i) => {
+        const notice = pageNotices[i];
+        if (!notice) {
+          return (
+            <div
+              key={`empty-${i}`}
+              className="rounded-[1.8vh]"
+              style={{ background: "rgba(74,77,85,0.25)" }}
+            />
+          );
+        }
+        return <NoticeCard key={notice.id} notice={notice} />;
+      })}
+    </div>
+  );
+}
+
+/* ─── Notice Card ─── */
+
+function NoticeCard({ notice }: { notice: Notice }) {
+  return (
+    <div
+      className="relative flex items-center overflow-hidden rounded-[1.8vh]"
+      style={{
+        background: "#4a4d55",
+        padding: "0 2.5vh",
+      }}
+    >
+      <h3
+        className="font-extrabold text-white leading-[1.15] truncate"
+        style={{
+          fontSize: "3.4vh",
+          letterSpacing: "-0.05vh",
+        }}
+      >
+        {notice.title}
+      </h3>
+    </div>
+  );
 }
 
 function EmptySlots() {
