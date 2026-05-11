@@ -2,6 +2,7 @@
 
 **작성일**: 2026-05-11
 **Figma**: 단일 화면 (`node-id=1-3`) — 메인 리스트 화면만 존재. 나머지 상태는 본 spec 에서 합리적 기본값으로 확정.
+**디자인 원본**: [`Notice-app/UI.png`](../../../Notice-app/UI.png) — 저장소 안에 보관. 텍스트 묘사와 충돌 시 **이미지가 진실의 원천**.
 **적용 범위**: `src/app/widget/page.tsx` 1개 파일 신규 작성 (현재 placeholder 교체).
 **건드리지 않는 곳**: `/display`, `/admin`, `electron/*`, `src/lib/instant.ts`, `src/lib/categories.ts`, IPC 표면, 인스톨러, 자동 업데이트.
 
@@ -26,6 +27,10 @@
 | PinToggle | 유지 — 우상단 작게 | 위젯 핵심 기능. Figma 에 없지만 보존. |
 
 ## 레이아웃
+
+![Figma 위젯 디자인](../../../Notice-app/UI.png)
+
+위 이미지가 구현 시각 기준. 아래 ASCII 다이어그램은 컴포넌트 위치 빠르게 잡기 위한 보조 참조.
 
 ```
 ┌─────────────────────────────────┐
