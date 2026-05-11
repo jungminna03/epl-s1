@@ -107,9 +107,28 @@ function WidgetHeader({ now }: { now: number }) {
 /* ─── Notice Grid ─── */
 
 const PAGE_SIZE = 4;
+const PAGE_CYCLE_MS = 10_000;
 
 function NoticeGrid({ notices }: { notices: Notice[] }) {
-  const pageNotices = notices.slice(0, PAGE_SIZE);
+  const totalPages = Math.max(1, Math.ceil(notices.length / PAGE_SIZE));
+  const [pageIdx, setPageIdx] = useState(0);
+
+  // notices 가 줄어들어 pageIdx 가 범위 밖이 되면 클램프
+  useEffect(() => {
+    setPageIdx((p) => Math.min(p, totalPages - 1));
+  }, [totalPages]);
+
+  // 자동 회전 (페이지 2개 이상일 때만)
+  useEffect(() => {
+    if (totalPages <= 1) return;
+    const id = setInterval(() => {
+      setPageIdx((p) => (p + 1) % totalPages);
+    }, PAGE_CYCLE_MS);
+    return () => clearInterval(id);
+  }, [totalPages]);
+
+  const start = pageIdx * PAGE_SIZE;
+  const pageNotices = notices.slice(start, start + PAGE_SIZE);
 
   return (
     <div
@@ -124,7 +143,7 @@ function NoticeGrid({ notices }: { notices: Notice[] }) {
         if (!notice) {
           return (
             <div
-              key={`empty-${i}`}
+              key={`empty-${pageIdx}-${i}`}
               className="rounded-[1.8vh]"
               style={{ background: "rgba(74,77,85,0.25)" }}
             />
