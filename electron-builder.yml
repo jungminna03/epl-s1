@@ -28,7 +28,8 @@ win:
         - x64
   icon: electron-resources/icon.ico
   artifactName: EPL-공지사항-Setup-${version}.${ext}
-  # 코드 서명은 일단 비활성. 인증서 받으면 certificateFile/Password 추가.
+  forceCodeSigning: false
+  verifyUpdateCodeSignature: false
 
 nsis:
   oneClick: true
