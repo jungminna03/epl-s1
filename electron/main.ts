@@ -4,6 +4,7 @@ import {
   app,
   ipcMain,
   screen,
+  session,
   shell,
 } from "electron";
 import log from "electron-log";
@@ -21,13 +22,34 @@ import {
 } from "./updater";
 import { createWidgetWindow } from "./widget-window";
 
+import path from "node:path";
+import os from "node:os";
+
 log.initialize();
 log.info(`[main] EPL widget 시작 (dev=${APP_CONFIG.isDev})`);
+
+// 캐시 문제 해결: userData 경로를 임시 폴더로 변경
+const userDataPath = path.join(os.tmpdir(), `epl-widget-${Date.now()}`);
+app.setPath("userData", userDataPath);
+log.info(`[main] userData path: ${userDataPath}`);
 
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
   app.quit();
 }
+
+// 앱 시작 시 세션 캐시 클리어
+app.on("ready", async () => {
+  try {
+    const defaultSession = session.defaultSession;
+    if (defaultSession) {
+      await defaultSession.clearCache();
+      log.info("[main] Session cache cleared");
+    }
+  } catch (err) {
+    log.warn(`[main] Failed to clear cache: ${err}`);
+  }
+});
 
 let widgetWin: BrowserWindow | null = null;
 let tray: Tray | null = null;

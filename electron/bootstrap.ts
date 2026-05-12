@@ -48,7 +48,7 @@ export type WidgetConfig = {
 
 /** 인스톨러에 같이 박히는 최후의 기본값. 원격/캐시 모두 실패 시 사용. */
 const DEFAULT_CONFIG: WidgetConfig = {
-  widgetUrl: "https://epl-s1.vercel.app/display",
+  widgetUrl: "https://epl-s1.vercel.app/widget",
   updateFeedUrl: "https://m3vzlavafd1gvxn2.public.blob.vercel-storage.com",
   pollIntervalMs: 30 * 60 * 1000,
   window: {
@@ -75,7 +75,7 @@ export async function loadBootstrapConfig(
     log.info("[bootstrap] dev 모드 — 로컬 기본값 사용");
     return {
       ...DEFAULT_CONFIG,
-      widgetUrl: "http://localhost:3000/display",
+      widgetUrl: "http://localhost:3000/widget",
     };
   }
 
