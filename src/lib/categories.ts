@@ -116,11 +116,6 @@ export function formatAbsolute(ts: number): string {
 }
 
 /**
- * 공지가 현재 게시 기간 내인지 판별.
- * - startDate 없으면 createdAt 사용
- * - endDate 없으면 무기한
- */
-/**
  * 쉼표로 구분된 카테고리 문자열을 파싱.
  * "1학년,3학년" → ["1학년", "3학년"]
  */
@@ -134,12 +129,41 @@ export function parseCategories(raw: string): Category[] {
     );
 }
 
+/** 종료일을 지정하지 않은 공지가 자동으로 사라지기까지의 기간(일). */
+export const AUTO_PERIOD_DAYS = 7;
+const AUTO_PERIOD_MS = AUTO_PERIOD_DAYS * 24 * 60 * 60 * 1000;
+
+export interface EffectivePeriod {
+  start: number;
+  end: number;
+  /** endDate 가 비어 있어 start + AUTO_PERIOD_DAYS 로 자동 계산된 경우 true */
+  isAutoEnd: boolean;
+}
+
+/**
+ * 공지의 실효 게시 기간을 계산.
+ * - startDate 없으면 createdAt 폴백
+ * - endDate 없으면 start + AUTO_PERIOD_DAYS (기본 7일) 자동 종료
+ */
+export function getEffectivePeriod(
+  notice: { createdAt: number; startDate?: number; endDate?: number },
+): EffectivePeriod {
+  const start = notice.startDate ?? notice.createdAt;
+  if (notice.endDate != null) {
+    return { start, end: notice.endDate, isAutoEnd: false };
+  }
+  return { start, end: start + AUTO_PERIOD_MS, isAutoEnd: true };
+}
+
+/**
+ * 공지가 현재 게시 기간 내인지 판별.
+ * 종료일이 비어 있으면 시작일 + AUTO_PERIOD_DAYS 까지만 노출.
+ */
 export function isNoticeVisible(
   notice: { createdAt: number; startDate?: number; endDate?: number },
   now: number = Date.now(),
 ): boolean {
-  const start = notice.startDate ?? notice.createdAt;
+  const { start, end } = getEffectivePeriod(notice);
   if (now < start) return false;
-  if (notice.endDate == null) return true;
-  return now <= notice.endDate;
+  return now <= end;
 }

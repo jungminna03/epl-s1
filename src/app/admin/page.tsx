@@ -9,7 +9,14 @@ import {
   type Category,
   type Notice,
 } from "@/lib/instant";
-import { CATEGORY_STYLES, DEFAULT_STYLE, formatAbsolute, parseCategories } from "@/lib/categories";
+import {
+  AUTO_PERIOD_DAYS,
+  CATEGORY_STYLES,
+  DEFAULT_STYLE,
+  formatAbsolute,
+  getEffectivePeriod,
+  parseCategories,
+} from "@/lib/categories";
 
 /**
  * /admin
@@ -358,8 +365,12 @@ function Dashboard({ onSignOut }: { onSignOut: () => void }) {
                   />
                 </div>
                 {!form.endDate && (
-                  <p className="mt-1 text-[11px] text-zinc-500">
-                    종료일을 비우면 무기한 게시됩니다.
+                  <p className="mt-1 text-[11px] text-amber-300/80">
+                    종료일을 비우면 시작일로부터 {AUTO_PERIOD_DAYS}일 뒤
+                    {form.startDate
+                      ? ` (${msToDate(dateToMs(form.startDate) + AUTO_PERIOD_DAYS * 24 * 60 * 60 * 1000)})`
+                      : ""}
+                    까지만 게시되고 자동으로 사라집니다.
                   </p>
                 )}
               </Field>
@@ -489,6 +500,7 @@ function NoticeRow({
 }) {
   const cats = parseCategories(notice.category);
   const s = cats.length > 0 ? CATEGORY_STYLES[cats[0]] : DEFAULT_STYLE;
+  const period = getEffectivePeriod(notice);
 
   return (
     <motion.li
@@ -521,9 +533,12 @@ function NoticeRow({
             <span className="text-[11px] text-zinc-500">
               {formatAbsolute(notice.createdAt)}
               {" · "}
-              {notice.startDate ? msToDate(notice.startDate) : msToDate(notice.createdAt)}
+              {msToDate(period.start)}
               {" ~ "}
-              {notice.endDate ? msToDate(notice.endDate) : "무기한"}
+              <span className={period.isAutoEnd ? "text-amber-300/80" : undefined}>
+                {msToDate(period.end)}
+                {period.isAutoEnd ? ` (자동·${AUTO_PERIOD_DAYS}일)` : ""}
+              </span>
             </span>
           </div>
           <h3 className="mt-1.5 truncate text-sm font-semibold text-zinc-100">
