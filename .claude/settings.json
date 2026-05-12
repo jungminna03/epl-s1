@@ -4,10 +4,12 @@
 
   "extraKnownMarketplaces": {},
 
-  "enabledPlugins": {},
+  "enabledPlugins": {
+    "superpowers@claude-plugins-official": true
+  },
 
   "permissions": {
-    "_comment": "team baseline. 너무 좁히지 말고, 명백히 위험한 것만 deny. 개인이 더 풀고 싶으면 settings.local.json 에서 allow 추가.",
+    "_comment": "team baseline. 명백히 위험한 명령 + 외부 의존성 추가형 명령을 deny. 인자 없는 npm install / npm ci 는 lockfile 동기화용으로 allow 유지.",
     "allow": [
       "Bash(git status:*)",
       "Bash(git diff:*)",
@@ -38,7 +40,18 @@
       "Bash(git push --force-with-lease origin main:*)",
       "Bash(git reset --hard:*)",
       "Bash(git clean -fdx:*)",
-      "Bash(git branch -D *)"
+      "Bash(git branch -D *)",
+      "Bash(npm install *)",
+      "Bash(npm i *)",
+      "Bash(npm add *)",
+      "Bash(npm uninstall *)",
+      "Bash(npm remove *)",
+      "Bash(yarn add *)",
+      "Bash(yarn remove *)",
+      "Bash(pnpm add *)",
+      "Bash(pnpm remove *)",
+      "Bash(bun add *)",
+      "Bash(bun remove *)"
     ]
   }
 }

@@ -17,6 +17,8 @@
 | `.mcp.local.json` | 개인 MCP 오버라이드 | gitignore |
 | `.gitignore` | 위 개인 파일들 무시 규칙 추가 | 기존 파일 수정 |
 
+추가로 CLAUDE.md 에 다음 룰들이 들어간다: 문서 위치 / 플러그인 협업 / 커밋 컨벤션 / MCP 협업 / **외부 의존성 통제(사전 승인 룰)**.
+
 ---
 
 ## 2. 자동 셋업 프롬프트 (Claude Code 에 그대로 붙여넣기)
@@ -66,6 +68,13 @@ Claude Code 팀 협업 셋업을 깔아줘. 다음 원칙을 지킬 것:
 - 개인 플러그인은 `.claude/settings.local.json.example` 을 복사해서 사용. (gitignore)
 - 키 우선순위: `settings.local.json` > `settings.json` > `~/.claude/settings.json`.
 
+# 외부 의존성 통제 (사전 승인 룰)
+
+- **금지**: `package.json` 의 `dependencies`/`devDependencies`/`optionalDependencies`/`peerDependencies` 를 임의 추가·변경.
+- **허용**: 인자 없는 `npm install` / `npm ci` (lockfile 동기화).
+- **새 패키지가 필요하면**: 문제·후보(1~3개, 크기/메인테넌스/라이선스)·자체 구현 대안·추천+이유 를 사용자에게 제시. 명시 승인 후에만 설치.
+- `.claude/settings.json` 의 `permissions.deny` 가 권한 단에서도 한 번 더 차단함.
+
 # 커밋 / 브랜치 컨벤션
 
 - **커밋 메시지**: Conventional Commits. `<type>(<scope>): <설명>`
@@ -91,7 +100,7 @@ Claude Code 팀 협업 셋업을 깔아줘. 다음 원칙을 지킬 것:
   "_comment": "팀 공통 Claude Code 설정. 개인 플러그인/오버라이드는 .claude/settings.local.json 에 작성.",
 
   "extraKnownMarketplaces": {},
-  "enabledPlugins": [],
+  "enabledPlugins": {},
 
   "permissions": {
     "allow": [
@@ -123,11 +132,34 @@ Claude Code 팀 협업 셋업을 깔아줘. 다음 원칙을 지킬 것:
       "Bash(git push --force-with-lease origin main:*)",
       "Bash(git reset --hard:*)",
       "Bash(git clean -fdx:*)",
-      "Bash(git branch -D *)"
+      "Bash(git branch -D *)",
+      "Bash(npm install *)",
+      "Bash(npm i *)",
+      "Bash(npm add *)",
+      "Bash(npm uninstall *)",
+      "Bash(npm remove *)",
+      "Bash(yarn add *)",
+      "Bash(yarn remove *)",
+      "Bash(pnpm add *)",
+      "Bash(pnpm remove *)",
+      "Bash(bun add *)",
+      "Bash(bun remove *)"
     ]
   }
 }
 ```
+
+> **외부 의존성 통제**
+> 위 deny 패턴은 인자 있는 `npm install <pkg>` / `npm add` / `yarn add` / `pnpm add` / `bun add` 를 모두 차단한다. 인자 없는 `npm install` / `npm ci` 는 allow 유지(lockfile 동기화용). 새 패키지 추가는 사용자 승인 뒤에 직접 수행. CLAUDE.md 에 같은 룰을 본문으로도 박아 둘 것.
+
+> **플러그인 등록 형식** (`enabledPlugins`)
+> ```json
+> "enabledPlugins": {
+>   "superpowers@claude-plugins-official": true,
+>   "my-plugin@my-marketplace": true
+> }
+> ```
+> `claude-plugins-official` 은 Claude Code 빌트인 마켓플레이스라 `extraKnownMarketplaces` 에 추가할 필요 없음. 사설 마켓플레이스는 `extraKnownMarketplaces` 에 source 정의 후 enable.
 
 > **스택별 권한 추가 예시**
 > - Next.js: `"Bash(npx next:*)"`

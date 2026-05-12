@@ -1,312 +1,324 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { motion } from "framer-motion";
+import { db, type Notice } from "@/lib/instant";
+import { isNoticeVisible } from "@/lib/categories";
 
-interface Notice {
-  id: string;
-  title: string;
-  content?: string;
-  createdAt: number;
-}
-
-const VERSION = "V.2026.5.1";
-const DEPT_NAME = "게임소프트웨어학과";
-const CYCLE_MS = 10000;
+const CLOCK_INTERVAL_MS = 30_000;
 
 export default function WidgetPage() {
-  const [now, setNow] = useState(Date.now());
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [notices, setNotices] = useState<Notice[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const { isLoading, error, data } = db.useQuery({
+    notices: { $: { order: { createdAt: "desc" } } },
+  });
 
-  const [readRecords, setReadRecords] = useState<Record<string, boolean>>({});
-
+  const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(timer);
+    const id = setInterval(() => setNow(Date.now()), CLOCK_INTERVAL_MS);
+    return () => clearInterval(id);
   }, []);
 
-  // 공지 데이터 가져오기 (최대 12개 = 3페이지)
-  const fetchNotices = useCallback(async () => {
-    try {
-      setIsLoading(true);
-      const response = await fetch("/api/notices");
-      if (!response.ok) throw new Error("HTTP " + response.status);
-      const data = await response.json();
-      // 최대 12개(3페이지)만 표시
-      const limitedNotices = (data.notices || []).slice(0, 12);
-      setNotices(limitedNotices);
-    } catch (err) {
-      console.error("Failed to fetch:", err);
-      setNotices([
-        { id: "1", title: "시험 일정 안내", createdAt: Date.now() },
-        { id: "2", title: "도서관 휴관 공지", createdAt: Date.now() - 86400000 },
-        { id: "3", title: "학생회 홍보", createdAt: Date.now() - 172800000 },
-        { id: "4", title: "장학금 신청 안내", createdAt: Date.now() - 259200000 },
-      ]);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+  if (isLoading) {
+    return (
+      <WidgetFrame>
+        <WidgetHeader now={now} />
+        <EmptySlots />
+      </WidgetFrame>
+    );
+  }
 
-  useEffect(() => {
-    fetchNotices();
-  }, [fetchNotices]);
+  if (error) {
+    return (
+      <WidgetFrame>
+        <WidgetHeader now={now} />
+        <ErrorBox message={error.message} />
+      </WidgetFrame>
+    );
+  }
 
-  const handleConfirm = useCallback((id: string) => {
-    setReadRecords((prev) => ({ ...prev, [id]: true }));
-    setSelectedId(null);
-    // 확인 후 자동으로 뒤로 가지 않음 - 사용자가 수동으로 버튼 눌러야 함
-  }, []);
-
-  // 맨 뒤로 보내기
-  const handleSendToBack = useCallback(() => {
-    if (typeof window !== "undefined") {
-      const epl = (window as any).epl;
-      if (epl?.setAlwaysOnTop) {
-        epl.setAlwaysOnTop(false);
-      }
-      // Electron IPC 호출 (배포 모드)
-      if (epl?.sendToBack) {
-        epl.sendToBack();
-      }
-    }
-  }, []);
-
-  const isUnread = useCallback(
-    (noticeId: string) => !readRecords[noticeId],
-    [readRecords]
-  );
-
-  const unreadCount = notices.filter((n) => isUnread(n.id)).length;
-
-  const date = new Date(now);
-  const formattedDate = `${date.getFullYear()}/${String(date.getMonth() + 1).padStart(2, "0")}/${String(date.getDate()).padStart(2, "0")} (${["일", "월", "화", "수", "목", "금", "토"][date.getDay()]})`;
-  const formattedTime = `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
-
-  // 창 클릭 시 맨 앞으로
-  const handleWindowClick = useCallback(() => {
-    if (typeof window !== "undefined") {
-      const epl = (window as any).epl;
-      if (epl?.bringToFront) {
-        epl.bringToFront();
-      }
-      if (epl?.setAlwaysOnTop) {
-        epl.setAlwaysOnTop(true);
-      }
-    }
-  }, []);
+  const notices = (data.notices ?? []).filter((n) => isNoticeVisible(n, now));
 
   return (
+    <WidgetFrame>
+      <WidgetHeader now={now} />
+      <NoticeGrid notices={notices} />
+    </WidgetFrame>
+  );
+}
+
+/* ─── Frame ─── */
+
+function WidgetFrame({ children }: { children: React.ReactNode }) {
+  return (
     <main
-      className="h-[600px] w-[400px] bg-[#999999] flex flex-col overflow-hidden select-none font-sans relative"
-      onClick={handleWindowClick}
+      className="relative flex h-screen w-screen flex-col overflow-hidden"
+      style={{ background: "#2a2d33", padding: "1.5vh" }}
     >
-      {/* Header */}
-      <header className="h-[50px] flex items-center justify-between px-3 py-1 shrink-0">
-        <span className="text-[11px] text-[#CCCCCC] font-normal">{VERSION}</span>
-        <div className="flex items-center text-[13px]">
-          <span className="mr-1">📢</span>
-          <span className="font-bold text-[#87CEEB]">{DEPT_NAME}</span>
-          <span className="ml-1 text-[#E0E0E0] font-normal">공지 사항</span>
-          {unreadCount > 0 && (
-            <span className="ml-2 bg-[#FF4444] text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
-              {unreadCount > 99 ? "99+" : unreadCount}
-            </span>
-          )}
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleSendToBack}
-            className="text-[#CCCCCC] hover:text-white text-sm px-2 py-1 transition-colors"
-            title="맨 뒤로 보내기"
-          >
-            🔽
-          </button>
-          <div className="flex flex-col items-end">
-            <span className="text-[12px] text-[#E0E0E0]">{formattedDate}</span>
-            <span className="text-[24px] font-bold text-[#FFFFFF] leading-none" style={{ fontVariantNumeric: "tabular-nums" }}>
-              {formattedTime}
-            </span>
-          </div>
-        </div>
-      </header>
-
-      {/* Content */}
-      <div className="flex-1 flex flex-col px-2 pb-2 min-h-0">
-        {isLoading ? (
-          <div className="flex-1 flex items-center justify-center">
-            <div className="flex items-center gap-2 text-[#CCCCCC]">
-              <div className="animate-spin rounded-full h-4 w-4 border-2 border-[#87CEEB] border-t-transparent"></div>
-              <span>로딩 중...</span>
-            </div>
-          </div>
-        ) : (
-          <NoticeList notices={notices} isUnread={isUnread} onSelect={setSelectedId} />
-        )}
-      </div>
-
-      {/* Detail Overlay */}
-      {selectedId && (
-        <DetailOverlay
-          notice={notices.find((n) => n.id === selectedId)!}
-          onConfirm={() => handleConfirm(selectedId)}
-        />
-      )}
+      {children}
     </main>
   );
 }
 
-// 페이지당 4개, 최대 3페이지(12개) 고정
-const ITEMS_PER_PAGE = 4;
-const MAX_PAGES = 3;
+/* ─── Header ─── */
 
-function NoticeList({
-  notices,
-  isUnread,
-  onSelect,
-}: {
-  notices: Notice[];
-  isUnread: (id: string) => boolean;
-  onSelect: (id: string) => void;
-}) {
-  const [currentPage, setCurrentPage] = useState(0);
+const VERSION_LABEL = "v0.2.0"; // package.json 의 version 과 손으로 맞춘다 (release 시 갱신)
 
-  // 최대 3페이지로 제한 (12개 공지)
-  const rawTotalPages = Math.ceil(notices.length / ITEMS_PER_PAGE);
-  const totalPages = Math.min(rawTotalPages, MAX_PAGES);
-
-  // 자동 순환: 10초마다 다음 페이지
-  useEffect(() => {
-    if (totalPages <= 1) return;
-    const interval = setInterval(() => {
-      setCurrentPage((prev) => (prev + 1) % totalPages);
-    }, CYCLE_MS);
-    return () => clearInterval(interval);
-  }, [totalPages]);
-
-  // 현재 페이지에 표시할 공지 (최대 4개)
-  const paginatedNotices = notices.slice(
-    currentPage * ITEMS_PER_PAGE,
-    Math.min((currentPage + 1) * ITEMS_PER_PAGE, MAX_PAGES * ITEMS_PER_PAGE)
-  );
+function WidgetHeader({ now }: { now: number }) {
+  const d = new Date(now);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  const weekday = ["일", "월", "화", "수", "목", "금", "토"][d.getDay()];
+  const time = `${String(d.getHours()).padStart(2, "0")}:${String(
+    d.getMinutes(),
+  ).padStart(2, "0")}`;
 
   return (
-    <div className="flex-1 flex flex-col">
-      <div className="flex-1 flex flex-col gap-2 justify-start pt-2">
-        {paginatedNotices.map((notice) => (
-          <NoticeCard
-            key={notice.id}
-            notice={notice}
-            isUnread={isUnread(notice.id)}
-            onClick={() => onSelect(notice.id)}
-          />
-        ))}
+    <header
+      className="flex shrink-0 flex-col"
+      style={{ gap: "0.4vh", paddingBottom: "1vh" }}
+    >
+      <div className="flex items-center justify-between">
+        <span className="text-slate-400" style={{ fontSize: "1vh" }}>
+          {VERSION_LABEL}
+        </span>
+        <span className="text-slate-400" style={{ fontSize: "1.3vh" }}>
+          {yyyy}/{mm}/{dd} ({weekday})
+        </span>
       </div>
+      <div className="flex items-center justify-between">
+        <span
+          className="flex items-center font-bold text-white"
+          style={{ gap: "0.6vh", fontSize: "1.6vh" }}
+        >
+          <span aria-hidden>📢</span>
+          <span>게임소프트웨어학과 공지 사항</span>
+        </span>
+        <span
+          className="font-extrabold text-white leading-none tracking-tighter"
+          style={{ fontSize: "3.2vh", fontVariantNumeric: "tabular-nums" }}
+        >
+          {time}
+        </span>
+      </div>
+    </header>
+  );
+}
 
-      {/* 페이지 인디케이터 - 최대 3개 도트 */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-center gap-1.5 py-3 shrink-0">
-          {Array.from({ length: totalPages }).map((_, i) => (
-            <button
-              key={i}
-              onClick={() => setCurrentPage(i)}
-              className={`rounded-full transition-all duration-300 ${
-                i === currentPage
-                  ? "bg-[#87CEEB] w-[20px] h-[6px]"
-                  : "bg-[#777777] w-[6px] h-[6px]"
-              }`}
+/* ─── Notice Grid ─── */
+
+const PAGE_SIZE = 4;
+const PAGE_CYCLE_MS = 10_000;
+
+function NoticeGrid({ notices }: { notices: Notice[] }) {
+  const totalPages = Math.max(1, Math.ceil(notices.length / PAGE_SIZE));
+  const [pageIdx, setPageIdx] = useState(0);
+
+  // notices 가 줄어들어 pageIdx 가 범위 밖이 되면 클램프
+  useEffect(() => {
+    setPageIdx((p) => Math.min(p, totalPages - 1));
+  }, [totalPages]);
+
+  // 자동 회전 (페이지 2개 이상일 때만)
+  useEffect(() => {
+    if (totalPages <= 1) return;
+    const id = setInterval(() => {
+      setPageIdx((p) => (p + 1) % totalPages);
+    }, PAGE_CYCLE_MS);
+    return () => clearInterval(id);
+  }, [totalPages]);
+
+  const start = pageIdx * PAGE_SIZE;
+  const pageNotices = notices.slice(start, start + PAGE_SIZE);
+
+  return (
+    <div
+      className="grid flex-1 min-h-0"
+      style={{
+        gridTemplateRows: "repeat(4, 1fr)",
+        gap: "1.2vh",
+      }}
+    >
+      {Array.from({ length: PAGE_SIZE }).map((_, i) => {
+        const notice = pageNotices[i];
+        if (!notice) {
+          return (
+            <div
+              key={`empty-${pageIdx}-${i}`}
+              className="rounded-[1.8vh]"
+              style={{ background: "rgba(74,77,85,0.25)" }}
             />
-          ))}
-        </div>
-      )}
+          );
+        }
+        return <NoticeCard key={notice.id} notice={notice} />;
+      })}
     </div>
   );
 }
 
-function NoticeCard({
-  notice,
-  isUnread,
-  onClick,
-}: {
-  notice: Notice;
-  isUnread: boolean;
-  onClick: () => void;
-}) {
-  const dateStr = notice.createdAt
-    ? new Date(notice.createdAt).toLocaleDateString("ko-KR")
-    : "";
+/* ─── External Display Opener ─── */
+
+function openDisplay() {
+  if (typeof window === "undefined") return;
+  const url = `${window.location.origin}/display`;
+  const epl = (
+    window as Window & { epl?: { openExternal: (u: string) => void } }
+  ).epl;
+  if (epl?.openExternal) {
+    epl.openExternal(url);
+  } else {
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
+}
+
+/* ─── Marquee Title ─── */
+
+const MARQUEE_SPEED_PX_PER_S = 30;
+const MARQUEE_GAP_VH = 4; // 텍스트 2회 반복 사이 간격
+
+function MarqueeTitle({ text }: { text: string }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const textRef = useRef<HTMLSpanElement>(null);
+  const [overflowPx, setOverflowPx] = useState(0);
+
+  // 폭 측정 — text/font 가 바뀔 때마다 다시
+  useLayoutEffect(() => {
+    function measure() {
+      const c = containerRef.current;
+      const t = textRef.current;
+      if (!c || !t) return;
+      const containerWidth = c.clientWidth;
+      const textWidth = t.scrollWidth;
+      setOverflowPx(Math.max(0, textWidth - containerWidth));
+    }
+    measure();
+    // 위젯 창 크기 변경/줌 변경에 대응
+    const ro = new ResizeObserver(measure);
+    if (containerRef.current) ro.observe(containerRef.current);
+    return () => ro.disconnect();
+  }, [text]);
+
+  const isOverflow = overflowPx > 0;
+
+  if (!isOverflow) {
+    return (
+      <div ref={containerRef} className="min-w-0 flex-1">
+        <span
+          ref={textRef}
+          className="block truncate font-extrabold text-white leading-[1.15]"
+          style={{
+            fontSize: "3.4vh",
+            letterSpacing: "-0.05vh",
+          }}
+        >
+          {text}
+        </span>
+      </div>
+    );
+  }
+
+  // 한 사이클 거리 = 첫 텍스트 분량만 흐르고 잠시 멈춤
+  const cycleDistance = overflowPx + 16;
+  const duration = cycleDistance / MARQUEE_SPEED_PX_PER_S;
 
   return (
-    <button
-      onClick={onClick}
-      className="h-[100px] bg-[#555555] rounded-[6px] px-4 py-3 text-left transition-all duration-150 hover:bg-[#666666] flex items-center justify-between shrink-0"
-    >
-      <div className="flex-1 min-w-0">
-        <h3 className="text-[18px] font-bold text-[#FFFFFF] leading-snug truncate">
-          {notice.title}
-        </h3>
-        <p className="text-[12px] text-[#CCCCCC] mt-1">{dateStr}</p>
-      </div>
+    <div ref={containerRef} className="relative min-w-0 flex-1 overflow-hidden">
+      <motion.div
+        className="flex shrink-0"
+        style={{ gap: `${MARQUEE_GAP_VH}vh`, width: "max-content" }}
+        animate={{ x: [0, -cycleDistance] }}
+        transition={{
+          duration,
+          ease: "linear",
+          repeat: Infinity,
+          repeatType: "loop",
+          repeatDelay: 1,
+        }}
+      >
+        <span
+          ref={textRef}
+          className="block whitespace-nowrap font-extrabold text-white leading-[1.15]"
+          style={{
+            fontSize: "3.4vh",
+            letterSpacing: "-0.05vh",
+          }}
+        >
+          {text}
+        </span>
+        <span
+          aria-hidden
+          className="block whitespace-nowrap font-extrabold text-white leading-[1.15]"
+          style={{
+            fontSize: "3.4vh",
+            letterSpacing: "-0.05vh",
+          }}
+        >
+          {text}
+        </span>
+      </motion.div>
+    </div>
+  );
+}
 
-      {isUnread && (
-        <div className="ml-3 flex-shrink-0">
-          <span className="flex h-3 w-3 relative">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#FF4444] opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-3 w-3 bg-[#FF4444]"></span>
-          </span>
-        </div>
-      )}
+/* ─── Notice Card ─── */
+
+function NoticeCard({ notice }: { notice: Notice }) {
+  return (
+    <button
+      type="button"
+      onClick={() => openDisplay()}
+      className="relative flex w-full items-center overflow-hidden rounded-[1.8vh] text-left transition-transform active:scale-[0.99]"
+      style={{
+        background: "#4a4d55",
+        padding: "0 2.5vh",
+      }}
+    >
+      <MarqueeTitle text={notice.title} />
     </button>
   );
 }
 
-function DetailOverlay({
-  notice,
-  onConfirm,
-}: {
-  notice: Notice;
-  onConfirm: () => void;
-}) {
-  const dateStr = notice.createdAt
-    ? new Date(notice.createdAt).toLocaleDateString("ko-KR")
-    : "";
-
+function EmptySlots() {
   return (
     <div
-      className="absolute inset-0 bg-black/65 flex items-center justify-center z-10 p-4"
-      onClick={onConfirm}
+      className="grid flex-1 min-h-0"
+      style={{
+        gridTemplateRows: "repeat(4, 1fr)",
+        gap: "1.2vh",
+      }}
+    >
+      {Array.from({ length: 4 }).map((_, i) => (
+        <div
+          key={i}
+          className="rounded-[1.8vh]"
+          style={{ background: "rgba(74,77,85,0.25)" }}
+        />
+      ))}
+    </div>
+  );
+}
+
+/* ─── Error ─── */
+
+function ErrorBox({ message }: { message: string }) {
+  return (
+    <div
+      className="flex flex-1 items-center justify-center"
+      style={{ padding: "1vh" }}
     >
       <div
-        className="w-[360px] max-h-[480px] bg-[#555555] rounded-[8px] flex flex-col overflow-hidden"
-        onClick={(e) => e.stopPropagation()}
+        className="rounded-2xl border border-red-400/30 bg-red-400/10 text-red-200"
+        style={{ padding: "1.5vh 2vh", maxWidth: "30vh" }}
       >
-        <div className="flex items-center justify-between px-3 py-2 border-b border-[#666666]">
-          <span className="text-[11px] text-[#CCCCCC]">{VERSION}</span>
-          <button
-            onClick={onConfirm}
-            className="w-8 h-8 flex items-center justify-center text-[#CCCCCC] hover:text-white text-lg"
-          >
-            ✕
-          </button>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-4">
-          <h2 className="text-lg font-bold text-white mb-2">{notice.title}</h2>
-          <p className="text-xs text-[#CCCCCC] mb-4">{dateStr}</p>
-          <p className="text-sm text-white leading-relaxed whitespace-pre-line">
-            {notice.content || "내용이 없습니다."}
-          </p>
-        </div>
-
-        <div className="p-3 border-t border-[#666666]">
-          <button
-            onClick={onConfirm}
-            className="w-full py-3 bg-[#777777] hover:bg-[#888888] rounded-[6px] text-sm font-bold text-white"
-          >
-            확인했어요
-          </button>
-        </div>
+        <p className="font-medium" style={{ fontSize: "1.2vh" }}>
+          데이터를 불러오지 못했습니다.
+        </p>
+        <p
+          className="mt-1 text-red-300/80"
+          style={{ fontSize: "1vh" }}
+        >
+          {message}
+        </p>
       </div>
     </div>
   );
