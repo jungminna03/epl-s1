@@ -1,11 +1,134 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { motion } from "framer-motion";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { db, type Notice } from "@/lib/instant";
-import { isNoticeVisible } from "@/lib/categories";
+import { getEffectivePeriod, isNoticeVisible } from "@/lib/categories";
+import { fireCheckEffect } from "@/lib/check-effects";
+import {
+  loadReadState,
+  maybeReset,
+  markRead,
+  saveReadState,
+  type ReadState,
+} from "@/lib/widget-read-state";
+
+/* ─── 상수 ──────────────────────────────────────────── */
+
+/**
+ * 위젯 버전 — CLAUDE.md 의 위젯 버저닝 룰 (V.YYYY.M.N) 을 따른다.
+ * 위젯이 사용자에게 의미있게 변할 때 같은 달 안에서 N 을 증가시키고,
+ * 달이 바뀌면 N 을 1 로 리셋. 사람이 직접 갱신한다.
+ */
+const WIDGET_VERSION = "V.2026.5.2";
 
 const CLOCK_INTERVAL_MS = 30_000;
+const PAGE_SIZE = 4;
+const MAX_PAGES = 3;
+const MAX_NOTICES = PAGE_SIZE * MAX_PAGES;
+const PAGE_CYCLE_MS = 10_000;
+const MARQUEE_SPEED_PX_PER_S = 30;
+const MARQUEE_GAP_VH = 4;
+const EXPIRING_SOON_MS = 24 * 60 * 60 * 1000;
+const ALWAYS_ON_TOP_PULSE_MS = 80;
+
+/* ─── Electron IPC 헬퍼 ─────────────────────────────── */
+
+type EplApi = {
+  setAlwaysOnTop?: (value: boolean) => void;
+  show?: () => void;
+  openExternal?: (url: string) => void;
+};
+
+/**
+ * 외부 URL 을 시스템 기본 브라우저로 연다.
+ * Electron 셸이면 epl.openExternal (main 이 shell.openExternal 호출 → 크롬 등),
+ * 일반 웹이면 새 탭.
+ */
+function openExternal(url: string) {
+  const epl = getEpl();
+  if (epl?.openExternal) {
+    epl.openExternal(url);
+    return;
+  }
+  if (typeof window !== "undefined") {
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
+}
+
+function getEpl(): EplApi | undefined {
+  if (typeof window === "undefined") return undefined;
+  return (window as Window & { epl?: EplApi }).epl;
+}
+
+/**
+ * 위젯 창을 맨 앞으로 부각시킨다.
+ * alwaysOnTop 을 false → true 로 잠깐 토글해 z-order 를 흔든다.
+ */
+function bringToFront() {
+  const epl = getEpl();
+  if (!epl) return;
+  epl.show?.();
+  epl.setAlwaysOnTop?.(false);
+  setTimeout(() => {
+    getEpl()?.setAlwaysOnTop?.(true);
+  }, ALWAYS_ON_TOP_PULSE_MS);
+}
+
+/**
+ * 위젯 창을 맨 뒤로 보낸다. 다음 정각 리셋 사이클에서 useReadState 가 bringToFront 로 복귀시킴.
+ */
+function sendToBack() {
+  getEpl()?.setAlwaysOnTop?.(false);
+}
+
+/* ─── 읽음 상태 훅 ────────────────────────────────── */
+
+function useReadState(visibleIds: string[], now: number) {
+  const [state, setState] = useState<ReadState>(() => loadReadState());
+  const lastResetAt = useRef(state.resetAt);
+
+  // now 가 갱신될 때마다 1시간 사이클 체크. 리셋되면 새 state 저장.
+  useEffect(() => {
+    setState((prev) => {
+      const next = maybeReset(prev, now);
+      if (next !== prev) saveReadState(next);
+      return next;
+    });
+  }, [now]);
+
+  // resetAt 이 바뀌었다는 건 사이클이 돌았다는 뜻 → 창을 맨 앞으로 부각.
+  useEffect(() => {
+    if (state.resetAt !== lastResetAt.current) {
+      lastResetAt.current = state.resetAt;
+      bringToFront();
+    }
+  }, [state.resetAt]);
+
+  const markReadFn = useCallback((id: string) => {
+    setState((prev) => {
+      const next = markRead(prev, id);
+      if (next !== prev) saveReadState(next);
+      return next;
+    });
+  }, []);
+
+  const unreadCount = useMemo(
+    () => visibleIds.filter((id) => !state.readIds.has(id)).length,
+    [visibleIds, state.readIds],
+  );
+
+  return { readIds: state.readIds, unreadCount, markRead: markReadFn };
+}
+
+/* ─── 메인 페이지 ─────────────────────────────────── */
 
 export default function WidgetPage() {
   const { isLoading, error, data } = db.useQuery({
@@ -18,10 +141,30 @@ export default function WidgetPage() {
     return () => clearInterval(id);
   }, []);
 
+  // 부팅 직후 1회 맨 앞 부각
+  useEffect(() => {
+    bringToFront();
+  }, []);
+
+  const [selectedNotice, setSelectedNotice] = useState<Notice | null>(null);
+
+  // 가시 공지 — 만료 필터 + 최대 12개 cap
+  const notices = useMemo(() => {
+    const raw = data?.notices ?? [];
+    return raw.filter((n) => isNoticeVisible(n, now)).slice(0, MAX_NOTICES);
+  }, [data, now]);
+
+  const visibleIds = useMemo(() => notices.map((n) => n.id), [notices]);
+
+  const { readIds, unreadCount, markRead: markReadFn } = useReadState(
+    visibleIds,
+    now,
+  );
+
   if (isLoading) {
     return (
       <WidgetFrame>
-        <WidgetHeader now={now} />
+        <WidgetHeader unreadCount={0} />
         <EmptySlots />
       </WidgetFrame>
     );
@@ -30,23 +173,36 @@ export default function WidgetPage() {
   if (error) {
     return (
       <WidgetFrame>
-        <WidgetHeader now={now} />
+        <WidgetHeader unreadCount={0} />
         <ErrorBox message={error.message} />
       </WidgetFrame>
     );
   }
 
-  const notices = (data.notices ?? []).filter((n) => isNoticeVisible(n, now));
-
   return (
     <WidgetFrame>
-      <WidgetHeader now={now} />
-      <NoticeGrid notices={notices} />
+      <WidgetHeader unreadCount={unreadCount} />
+      <NoticeGrid
+        notices={notices}
+        readIds={readIds}
+        now={now}
+        onSelect={setSelectedNotice}
+        paused={selectedNotice !== null}
+      />
+      <AnimatePresence>
+        {selectedNotice && (
+          <NoticeDetailOverlay
+            notice={selectedNotice}
+            onClose={() => setSelectedNotice(null)}
+            onConfirm={markReadFn}
+          />
+        )}
+      </AnimatePresence>
     </WidgetFrame>
   );
 }
 
-/* ─── Frame ─── */
+/* ─── Frame ─────────────────────────────────────────── */
 
 function WidgetFrame({ children }: { children: React.ReactNode }) {
   return (
@@ -59,129 +215,262 @@ function WidgetFrame({ children }: { children: React.ReactNode }) {
   );
 }
 
-/* ─── Header ─── */
+/* ─── Header ────────────────────────────────────────── */
 
-const VERSION_LABEL = "v0.2.0"; // package.json 의 version 과 손으로 맞춘다 (release 시 갱신)
-
-function WidgetHeader({ now }: { now: number }) {
-  const d = new Date(now);
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  const weekday = ["일", "월", "화", "수", "목", "금", "토"][d.getDay()];
-  const time = `${String(d.getHours()).padStart(2, "0")}:${String(
-    d.getMinutes(),
-  ).padStart(2, "0")}`;
-
+function WidgetHeader({
+  unreadCount,
+}: {
+  unreadCount: number;
+}) {
   return (
     <header
       className="flex shrink-0 flex-col"
-      style={{ gap: "0.4vh", paddingBottom: "1vh" }}
+      style={{ gap: "0.8vh", paddingBottom: "2vh" }}
     >
       <div className="flex items-center justify-between">
-        <span className="text-slate-400" style={{ fontSize: "1vh" }}>
-          {VERSION_LABEL}
+        <span className="text-slate-400" style={{ fontSize: "1.4vh" }}>
+          {WIDGET_VERSION}
         </span>
-        <span className="text-slate-400" style={{ fontSize: "1.3vh" }}>
-          {yyyy}/{mm}/{dd} ({weekday})
-        </span>
+        <HeaderControl />
       </div>
       <div className="flex items-center justify-between">
         <span
-          className="flex items-center font-bold text-white"
-          style={{ gap: "0.6vh", fontSize: "1.6vh" }}
+          className="flex items-center font-bold text-white whitespace-nowrap"
+          style={{ gap: "1.2vh", fontSize: "4vh" }}
         >
           <span aria-hidden>📢</span>
-          <span>게임소프트웨어학과 공지 사항</span>
-        </span>
-        <span
-          className="font-extrabold text-white leading-none tracking-tighter"
-          style={{ fontSize: "3.2vh", fontVariantNumeric: "tabular-nums" }}
-        >
-          {time}
+          <span>게임소프트웨어학과 공지사항</span>
+          <UnreadBadge count={unreadCount} />
         </span>
       </div>
     </header>
   );
 }
 
-/* ─── Notice Grid ─── */
+function HeaderControl() {
+  return (
+    <button
+      type="button"
+      onClick={sendToBack}
+      className="leading-none text-slate-400 transition-colors hover:text-white"
+      style={{ fontSize: "2.8vh", padding: "0.4vh 0.8vh" }}
+      aria-label="맨 뒤로 보내기"
+      title="맨 뒤로 보내기 (다음 정각 리셋 때 다시 맨 앞으로)"
+    >
+      ✕
+    </button>
+  );
+}
 
-const PAGE_SIZE = 4;
-const PAGE_CYCLE_MS = 10_000;
+function UnreadBadge({ count }: { count: number }) {
+  const display = count > 99 ? "99+" : String(count);
+  const isZero = count <= 0;
+  return (
+    <span
+      className="inline-flex items-center justify-center rounded-full font-bold text-white"
+      style={{
+        minWidth: "4.4vh",
+        height: "4.4vh",
+        padding: "0 1.3vh",
+        marginLeft: "0.8vh",
+        background: isZero ? "#64748b" : "#ef4444",
+        fontSize: "2.4vh",
+        lineHeight: 1,
+        opacity: isZero ? 0.7 : 1,
+      }}
+      title={isZero ? "모두 확인함" : `${count}개 안 본 공지`}
+    >
+      {display}
+    </span>
+  );
+}
 
-function NoticeGrid({ notices }: { notices: Notice[] }) {
+/* ─── Notice Grid ───────────────────────────────────── */
+
+function NoticeGrid({
+  notices,
+  readIds,
+  now,
+  onSelect,
+  paused,
+}: {
+  notices: Notice[];
+  readIds: Set<string>;
+  now: number;
+  onSelect: (n: Notice) => void;
+  paused: boolean;
+}) {
   const totalPages = Math.max(1, Math.ceil(notices.length / PAGE_SIZE));
   const [pageIdx, setPageIdx] = useState(0);
+  // 1 = 다음(오른쪽→왼쪽), -1 = 이전(왼쪽→오른쪽). AnimatePresence 의 enter/exit 방향을 가리키는 데 쓴다.
+  const directionRef = useRef(1);
 
-  // notices 가 줄어들어 pageIdx 가 범위 밖이 되면 클램프
   useEffect(() => {
     setPageIdx((p) => Math.min(p, totalPages - 1));
   }, [totalPages]);
 
-  // 자동 회전 (페이지 2개 이상일 때만)
+  // 상세보기 열린 동안에는 자동 회전 정지. layoutId 카드가 페이지 전환으로
+  // 언마운트되면 공유 레이아웃 애니메이션이 깨져 오버레이가 반투명 글리치 상태로 빠짐.
   useEffect(() => {
-    if (totalPages <= 1) return;
+    if (totalPages <= 1 || paused) return;
     const id = setInterval(() => {
+      directionRef.current = 1;
       setPageIdx((p) => (p + 1) % totalPages);
     }, PAGE_CYCLE_MS);
     return () => clearInterval(id);
+  }, [totalPages, paused]);
+
+  const goPrev = useCallback(() => {
+    if (totalPages <= 1) return;
+    directionRef.current = -1;
+    setPageIdx((p) => (p - 1 + totalPages) % totalPages);
+  }, [totalPages]);
+
+  const goNext = useCallback(() => {
+    if (totalPages <= 1) return;
+    directionRef.current = 1;
+    setPageIdx((p) => (p + 1) % totalPages);
   }, [totalPages]);
 
   const start = pageIdx * PAGE_SIZE;
   const pageNotices = notices.slice(start, start + PAGE_SIZE);
 
   return (
-    <div
-      className="grid flex-1 min-h-0"
-      style={{
-        gridTemplateRows: "repeat(4, 1fr)",
-        gap: "1.2vh",
-      }}
-    >
-      {Array.from({ length: PAGE_SIZE }).map((_, i) => {
-        const notice = pageNotices[i];
-        if (!notice) {
-          return (
-            <div
-              key={`empty-${pageIdx}-${i}`}
-              className="rounded-[1.8vh]"
-              style={{ background: "rgba(74,77,85,0.25)" }}
-            />
-          );
-        }
-        return <NoticeCard key={notice.id} notice={notice} />;
-      })}
+    <div className="flex flex-1 min-h-0 flex-col">
+      <div className="relative flex-1 min-h-0 overflow-hidden">
+        <AnimatePresence
+          initial={false}
+          mode="popLayout"
+          custom={directionRef.current}
+        >
+          <motion.div
+            key={pageIdx}
+            custom={directionRef.current}
+            variants={{
+              enter: (dir: number) => ({ x: `${dir * 100}%`, opacity: 0.4 }),
+              center: { x: "0%", opacity: 1 },
+              exit: (dir: number) => ({ x: `${dir * -100}%`, opacity: 0.4 }),
+            }}
+            initial="enter"
+            animate="center"
+            exit="exit"
+            transition={{ type: "spring", stiffness: 320, damping: 32 }}
+            className="absolute inset-0 grid"
+            style={{ gridTemplateRows: "repeat(4, 1fr)", gap: "1.2vh" }}
+          >
+            {Array.from({ length: PAGE_SIZE }).map((_, i) => {
+              const notice = pageNotices[i];
+              if (!notice) {
+                return (
+                  <div
+                    key={`empty-${pageIdx}-${i}`}
+                    className="rounded-[1.8vh]"
+                    style={{ background: "rgba(74,77,85,0.25)" }}
+                  />
+                );
+              }
+              return (
+                <NoticeCard
+                  key={notice.id}
+                  notice={notice}
+                  isUnread={!readIds.has(notice.id)}
+                  isExpiringSoon={isNoticeExpiringSoon(notice, now)}
+                  onSelect={onSelect}
+                />
+              );
+            })}
+          </motion.div>
+        </AnimatePresence>
+      </div>
+      <PageNav
+        total={totalPages}
+        current={pageIdx}
+        onPrev={goPrev}
+        onNext={goNext}
+      />
     </div>
   );
 }
 
-/* ─── External Display Opener ─── */
-
-function openDisplay() {
-  if (typeof window === "undefined") return;
-  const url = `${window.location.origin}/display`;
-  const epl = (
-    window as Window & { epl?: { openExternal: (u: string) => void } }
-  ).epl;
-  if (epl?.openExternal) {
-    epl.openExternal(url);
-  } else {
-    window.open(url, "_blank", "noopener,noreferrer");
-  }
+function isNoticeExpiringSoon(notice: Notice, now: number): boolean {
+  const { end } = getEffectivePeriod(notice);
+  const diff = end - now;
+  return diff > 0 && diff <= EXPIRING_SOON_MS;
 }
 
-/* ─── Marquee Title ─── */
+function PageNav({
+  total,
+  current,
+  onPrev,
+  onNext,
+}: {
+  total: number;
+  current: number;
+  onPrev: () => void;
+  onNext: () => void;
+}) {
+  const disabled = total <= 1;
+  return (
+    <div
+      className="flex shrink-0 items-center justify-center"
+      style={{ paddingTop: "1.6vh", gap: "2.8vh" }}
+    >
+      <NavArrow direction="prev" onClick={onPrev} disabled={disabled} />
+      <div className="flex items-center" style={{ gap: "1.2vh" }}>
+        {Array.from({ length: Math.max(1, total) }).map((_, i) => (
+          <div
+            key={i}
+            className="rounded-full transition-all"
+            style={{
+              width: i === current ? "2.8vh" : "1.6vh",
+              height: "1.6vh",
+              background: i === current ? "#87CEEB" : "rgba(255,255,255,0.2)",
+            }}
+          />
+        ))}
+      </div>
+      <NavArrow direction="next" onClick={onNext} disabled={disabled} />
+    </div>
+  );
+}
 
-const MARQUEE_SPEED_PX_PER_S = 30;
-const MARQUEE_GAP_VH = 4; // 텍스트 2회 반복 사이 간격
+function NavArrow({
+  direction,
+  onClick,
+  disabled,
+}: {
+  direction: "prev" | "next";
+  onClick: () => void;
+  disabled: boolean;
+}) {
+  const isPrev = direction === "prev";
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={isPrev ? "이전 페이지" : "다음 페이지"}
+      className="flex items-center justify-center rounded-full leading-none text-slate-300 transition-all hover:bg-white/10 hover:text-white active:scale-90 disabled:cursor-not-allowed disabled:hover:bg-[rgba(255,255,255,0.06)] disabled:hover:text-slate-300"
+      style={{
+        width: "4.8vh",
+        height: "4.8vh",
+        fontSize: "3.2vh",
+        background: "rgba(255,255,255,0.06)",
+        opacity: disabled ? 0.35 : 1,
+      }}
+    >
+      {isPrev ? "‹" : "›"}
+    </button>
+  );
+}
+
+/* ─── Marquee Title ─────────────────────────────────── */
 
 function MarqueeTitle({ text }: { text: string }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const textRef = useRef<HTMLSpanElement>(null);
   const [overflowPx, setOverflowPx] = useState(0);
 
-  // 폭 측정 — text/font 가 바뀔 때마다 다시
   useLayoutEffect(() => {
     function measure() {
       const c = containerRef.current;
@@ -192,7 +481,6 @@ function MarqueeTitle({ text }: { text: string }) {
       setOverflowPx(Math.max(0, textWidth - containerWidth));
     }
     measure();
-    // 위젯 창 크기 변경/줌 변경에 대응
     const ro = new ResizeObserver(measure);
     if (containerRef.current) ro.observe(containerRef.current);
     return () => ro.disconnect();
@@ -206,10 +494,7 @@ function MarqueeTitle({ text }: { text: string }) {
         <span
           ref={textRef}
           className="block truncate font-extrabold text-white leading-[1.15]"
-          style={{
-            fontSize: "3.4vh",
-            letterSpacing: "-0.05vh",
-          }}
+          style={{ fontSize: "4vh", letterSpacing: "-0.05vh" }}
         >
           {text}
         </span>
@@ -217,7 +502,6 @@ function MarqueeTitle({ text }: { text: string }) {
     );
   }
 
-  // 한 사이클 거리 = 첫 텍스트 분량만 흐르고 잠시 멈춤
   const cycleDistance = overflowPx + 16;
   const duration = cycleDistance / MARQUEE_SPEED_PX_PER_S;
 
@@ -238,20 +522,14 @@ function MarqueeTitle({ text }: { text: string }) {
         <span
           ref={textRef}
           className="block whitespace-nowrap font-extrabold text-white leading-[1.15]"
-          style={{
-            fontSize: "3.4vh",
-            letterSpacing: "-0.05vh",
-          }}
+          style={{ fontSize: "4vh", letterSpacing: "-0.05vh" }}
         >
           {text}
         </span>
         <span
           aria-hidden
           className="block whitespace-nowrap font-extrabold text-white leading-[1.15]"
-          style={{
-            fontSize: "3.4vh",
-            letterSpacing: "-0.05vh",
-          }}
+          style={{ fontSize: "4vh", letterSpacing: "-0.05vh" }}
         >
           {text}
         </span>
@@ -260,32 +538,259 @@ function MarqueeTitle({ text }: { text: string }) {
   );
 }
 
-/* ─── Notice Card ─── */
+/* ─── Notice Card ───────────────────────────────────── */
 
-function NoticeCard({ notice }: { notice: Notice }) {
+function NoticeCard({
+  notice,
+  isUnread,
+  isExpiringSoon,
+  onSelect,
+}: {
+  notice: Notice;
+  isUnread: boolean;
+  isExpiringSoon: boolean;
+  onSelect: (n: Notice) => void;
+}) {
   return (
-    <button
+    <motion.button
       type="button"
-      onClick={() => openDisplay()}
-      className="relative flex w-full items-center overflow-hidden rounded-[1.8vh] text-left transition-transform active:scale-[0.99]"
+      layoutId={`notice-card-${notice.id}`}
+      onClick={() => onSelect(notice)}
+      className="relative flex w-full items-center overflow-hidden text-left transition-transform active:scale-[0.99]"
       style={{
         background: "#4a4d55",
         padding: "0 2.5vh",
+        borderRadius: "1.8vh",
+        boxShadow: isExpiringSoon ? "inset 0 0 0 0.3vh #facc15" : undefined,
       }}
     >
       <MarqueeTitle text={notice.title} />
+      {isUnread && <UnreadDot />}
+    </motion.button>
+  );
+}
+
+function UnreadDot() {
+  return (
+    <span
+      aria-hidden
+      className="absolute rounded-full"
+      style={{
+        top: "0.8vh",
+        right: "0.8vh",
+        width: "2.4vh",
+        height: "2.4vh",
+        background: "#ef4444",
+      }}
+    />
+  );
+}
+
+/* ─── Detail Overlay ────────────────────────────────── */
+
+function getCheckCount(notice: Notice): number {
+  return (notice as Notice & { checkCount?: number }).checkCount ?? 0;
+}
+
+function LinkCard({ url }: { url: string }) {
+  const domain = useMemo(() => {
+    try {
+      return new URL(url).hostname;
+    } catch {
+      return url;
+    }
+  }, [url]);
+
+  return (
+    <button
+      type="button"
+      onClick={() => openExternal(url)}
+      className="flex w-full items-center rounded-[1vh] border border-slate-700/60 bg-[#3a3d44] transition-all hover:border-cyan-400/40 hover:bg-[#43464e]"
+      style={{
+        marginBottom: "1.4vh",
+        padding: "1.4vh 1.4vh",
+        gap: "1.2vh",
+      }}
+    >
+      <div
+        className="flex shrink-0 items-center justify-center rounded-[0.6vh] bg-slate-700/50"
+        style={{ width: "3vh", height: "3vh" }}
+      >
+        <span style={{ fontSize: "3.2vh" }}>🔗</span>
+      </div>
+      <div className="min-w-0 flex-1 text-left">
+        <p
+          className="truncate font-semibold text-slate-200"
+          style={{ fontSize: "2.8vh", lineHeight: 1.2 }}
+        >
+          관련 링크 열기
+        </p>
+        <p
+          className="truncate text-slate-400"
+          style={{ fontSize: "2.2vh", lineHeight: 1.2 }}
+        >
+          {domain}
+        </p>
+      </div>
+      <span
+        aria-hidden
+        className="shrink-0 text-slate-500"
+        style={{ fontSize: "2.8vh" }}
+      >
+        →
+      </span>
     </button>
   );
 }
+
+function NoticeDetailOverlay({
+  notice,
+  onClose,
+  onConfirm,
+}: {
+  notice: Notice;
+  onClose: () => void;
+  onConfirm: (id: string) => void;
+}) {
+  const [locked, setLocked] = useState(false);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    return () => {
+      if (closeTimer.current) clearTimeout(closeTimer.current);
+    };
+  }, []);
+
+  function handleCheck() {
+    if (locked) return;
+    setLocked(true);
+
+    const dbCount = getCheckCount(notice);
+    db.transact(
+      db.tx.notices[notice.id].update({ checkCount: dbCount + 1 }),
+    );
+    onConfirm(notice.id);
+
+    if (btnRef.current) {
+      const r = btnRef.current.getBoundingClientRect();
+      fireCheckEffect(r.left + r.width / 2, r.top + r.height / 2);
+    }
+
+    closeTimer.current = setTimeout(() => onClose(), 350);
+  }
+
+  const created = new Date(notice.createdAt);
+  const dateLabel = `${created.getFullYear()}/${String(
+    created.getMonth() + 1,
+  ).padStart(2, "0")}/${String(created.getDate()).padStart(2, "0")}`;
+
+  return (
+    <motion.div
+      className="absolute inset-0 z-50 flex items-end justify-center"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.18 }}
+      onClick={onClose}
+    >
+      <div
+        className="absolute inset-0"
+        style={{ background: "rgba(0,0,0,0.65)" }}
+      />
+      <motion.div
+        layoutId={`notice-card-${notice.id}`}
+        className="relative flex w-full flex-col overflow-hidden"
+        style={{
+          height: "100%",
+          background: "#4a4d55",
+          borderRadius: "1.8vh",
+          padding: "2.5vh 2.5vh 2vh",
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h2
+          className="font-extrabold text-white"
+          style={{
+            fontSize: "6vh",
+            lineHeight: 1.2,
+            letterSpacing: "-0.05vh",
+            marginBottom: "0.6vh",
+          }}
+        >
+          {notice.title}
+        </h2>
+        <p
+          className="text-slate-400"
+          style={{ fontSize: "2.6vh", marginBottom: "1.6vh" }}
+        >
+          {dateLabel}
+        </p>
+        <div
+          className="flex-1 overflow-y-auto whitespace-pre-wrap text-white"
+          style={{
+            fontSize: "3.4vh",
+            lineHeight: 1.55,
+            marginBottom: "1.6vh",
+            scrollbarWidth: "thin",
+            scrollbarColor: "#777 #444",
+          }}
+        >
+          {notice.content || "(내용 없음)"}
+        </div>
+
+        {notice.link && <LinkCard url={notice.link} />}
+
+        <button
+          ref={btnRef}
+          type="button"
+          onClick={handleCheck}
+          disabled={locked}
+          className="flex w-full items-center justify-center rounded-[1.2vh] border transition-all active:scale-[0.97]"
+          style={{
+            padding: "2.2vh 2vh",
+            gap: "1.2vh",
+            background: locked
+              ? "rgba(30,41,59,0.5)"
+              : "linear-gradient(135deg, rgba(167,139,250,0.18), rgba(34,211,238,0.12))",
+            borderColor: locked
+              ? "rgba(100,116,139,0.2)"
+              : "rgba(167,139,250,0.3)",
+            opacity: locked ? 0.6 : 1,
+            pointerEvents: locked ? "none" : "auto",
+          }}
+        >
+          <span
+            className="flex items-center justify-center rounded-full font-bold text-white"
+            style={{
+              width: "4vh",
+              height: "4vh",
+              background: "linear-gradient(135deg, #22d3ee, #60a5fa, #a78bfa)",
+              fontSize: "2.2vh",
+              boxShadow: "0 0 1.5vh rgba(96,165,250,0.35)",
+            }}
+          >
+            ✓
+          </span>
+          <span
+            className="font-bold text-white"
+            style={{ fontSize: "4vh", lineHeight: 1 }}
+          >
+            확인했어요
+          </span>
+        </button>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+/* ─── Empty / Error ────────────────────────────────── */
 
 function EmptySlots() {
   return (
     <div
       className="grid flex-1 min-h-0"
-      style={{
-        gridTemplateRows: "repeat(4, 1fr)",
-        gap: "1.2vh",
-      }}
+      style={{ gridTemplateRows: "repeat(4, 1fr)", gap: "1.2vh" }}
     >
       {Array.from({ length: 4 }).map((_, i) => (
         <div
@@ -297,8 +802,6 @@ function EmptySlots() {
     </div>
   );
 }
-
-/* ─── Error ─── */
 
 function ErrorBox({ message }: { message: string }) {
   return (
