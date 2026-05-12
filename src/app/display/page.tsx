@@ -14,7 +14,6 @@ import {
 import { fireCheckEffect } from "@/lib/check-effects";
 
 const CYCLE_MS = 10_000;
-const RETURN_MS = 60_000;
 const PAGE_SIZE = 4;
 
 const SPRING = { type: "spring" as const, stiffness: 200, damping: 25 };
@@ -132,36 +131,6 @@ function SignageLayout({ notices, now }: { notices: Notice[]; now: number }) {
     }
     return stopCycle;
   }, [expandedId, startCycle, stopCycle]);
-
-  // --- Fullscreen return timer ---
-  const returnRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const resetReturnTimer = useCallback(() => {
-    if (returnRef.current) clearTimeout(returnRef.current);
-    returnRef.current = setTimeout(() => {
-      setExpandedId(null);
-    }, RETURN_MS);
-  }, []);
-
-  const clearReturnTimer = useCallback(() => {
-    if (returnRef.current) {
-      clearTimeout(returnRef.current);
-      returnRef.current = null;
-    }
-  }, []);
-
-  useEffect(() => {
-    if (expandedId) {
-      resetReturnTimer();
-    } else {
-      clearReturnTimer();
-    }
-    return clearReturnTimer;
-  }, [expandedId, resetReturnTimer, clearReturnTimer]);
-
-  const handleInteraction = useCallback(() => {
-    if (expandedId) resetReturnTimer();
-  }, [expandedId, resetReturnTimer]);
 
   const handleClose = useCallback(() => {
     setExpandedId(null);
@@ -310,7 +279,6 @@ function SignageLayout({ notices, now }: { notices: Notice[]; now: number }) {
                 notice={expandedNotice}
                 now={now}
                 onClose={handleClose}
-                onInteraction={handleInteraction}
               />
             )}
           </AnimatePresence>
@@ -574,12 +542,10 @@ function ExpandedTile({
   notice,
   now,
   onClose,
-  onInteraction,
 }: {
   notice: Notice;
   now: number;
   onClose: () => void;
-  onInteraction: () => void;
 }) {
   const cats = parseCategories(notice.category);
   const style = cats.length > 0 ? CATEGORY_STYLES[cats[0]] : DEFAULT_STYLE;
@@ -589,13 +555,12 @@ function ExpandedTile({
   const overscrollStart = useRef<{ x: number; y: number; atTop: boolean; atBottom: boolean } | null>(null);
 
   const captureStart = useCallback((x: number, y: number) => {
-    onInteraction();
     const el = scrollRef.current;
     if (!el) return;
     const atTop = el.scrollTop <= 0;
     const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 1;
     overscrollStart.current = { x, y, atTop, atBottom };
-  }, [onInteraction]);
+  }, []);
 
   const captureEnd = useCallback((x: number, y: number) => {
     if (!overscrollStart.current) return;
@@ -694,7 +659,6 @@ function ExpandedTile({
         dragSnapToOrigin
         dragConstraints={scrollRef}
         dragTransition={{ bounceStiffness: 600, bounceDamping: 30 }}
-        onDrag={() => onInteraction()}
       >
         {/* Category badges */}
         {cats.length > 0 && (
@@ -744,7 +708,6 @@ function ExpandedTile({
           <button
             onClick={() => {
               if (notice.link) openExternal(notice.link);
-              onInteraction();
             }}
             className="flex w-full items-center rounded-[0.8vh] border border-slate-700/60 bg-[#1e293b] transition-all hover:border-cyan-400/30 hover:bg-[#243044]"
             style={{
@@ -780,7 +743,7 @@ function ExpandedTile({
         )}
 
         {/* Check button — big & tappable */}
-        <CheckButton notice={notice} onInteraction={onInteraction} />
+        <CheckButton notice={notice} />
       </motion.div>
       </div>
     </motion.div>
@@ -791,10 +754,8 @@ function ExpandedTile({
 
 function CheckButton({
   notice,
-  onInteraction,
 }: {
   notice: Notice;
-  onInteraction: () => void;
 }) {
   const [localAdded, setLocalAdded] = useState(0);
   const [locked, setLocked] = useState(false);
@@ -818,7 +779,6 @@ function CheckButton({
 
   function handleCheck() {
     if (locked) return;
-    onInteraction();
     setLocalAdded((a) => a + 1);
     db.transact(
       db.tx.notices[notice.id].update({ checkCount: dbCount + localAdded + 1 }),
