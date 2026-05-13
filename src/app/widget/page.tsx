@@ -32,7 +32,7 @@ import {
  * 위젯이 사용자에게 의미있게 변할 때 같은 달 안에서 N 을 증가시키고,
  * 달이 바뀌면 N 을 1 로 리셋. 사람이 직접 갱신한다.
  */
-const WIDGET_VERSION = "V.2026.5.5";
+const WIDGET_VERSION = "V.2026.5.6";
 
 const CLOCK_INTERVAL_MS = 30_000;
 const PAGE_SIZE = 4;
@@ -222,7 +222,7 @@ function WidgetFrame({ children }: { children: React.ReactNode }) {
   return (
     <main
       className="relative flex h-screen w-screen flex-col overflow-hidden"
-      style={{ background: "#2a2d33", padding: "1.5vh" }}
+      style={{ background: "#0f1219", padding: "1.5vh" }}
     >
       {children}
     </main>
@@ -249,11 +249,39 @@ function WidgetHeader({
       </div>
       <div className="flex items-center justify-between">
         <span
-          className="flex items-center font-bold text-white whitespace-nowrap"
+          className="flex items-center whitespace-nowrap"
           style={{ gap: "1.2vh", fontSize: "4vh" }}
         >
-          <span aria-hidden>📢</span>
-          <span>게임소프트웨어학과 공지사항</span>
+          <span
+            aria-hidden
+            className="rounded-full bg-cyan-400"
+            style={{
+              width: "1.4vh",
+              height: "1.4vh",
+              boxShadow: "0 0 1vh rgba(34,211,238,0.6)",
+              animation: "livePulse 2s ease-in-out infinite",
+            }}
+          />
+          <span style={{ letterSpacing: "-0.02vh" }}>
+            <span
+              className="font-extrabold"
+              style={{
+                fontSize: "1.15em",
+                background: "linear-gradient(90deg, #22d3ee, #60a5fa, #a78bfa)",
+                WebkitBackgroundClip: "text",
+                WebkitTextFillColor: "transparent",
+                filter: "drop-shadow(0 0 1vh rgba(96,165,250,0.4))",
+              }}
+            >
+              게임소프트웨어학과
+            </span>
+            <span
+              className="font-light text-slate-400"
+              style={{ marginLeft: "0.8vh", fontSize: "0.95em" }}
+            >
+              공지사항
+            </span>
+          </span>
           <UnreadBadge count={unreadCount} />
         </span>
       </div>
@@ -283,12 +311,12 @@ function UnreadBadge({ count }: { count: number }) {
     <span
       className="inline-flex items-center justify-center rounded-full font-bold text-white"
       style={{
-        minWidth: "4.4vh",
-        height: "4.4vh",
-        padding: "0 1.3vh",
-        marginLeft: "0.8vh",
+        minWidth: "5.2vh",
+        height: "5.2vh",
+        padding: "0 1.5vh",
+        marginLeft: "1vh",
         background: isZero ? "#64748b" : "#ef4444",
-        fontSize: "2.4vh",
+        fontSize: "2.8vh",
         lineHeight: 1,
         opacity: isZero ? 0.7 : 1,
       }}
@@ -379,7 +407,10 @@ function NoticeGrid({
                   <div
                     key={`empty-${pageIdx}-${i}`}
                     className="rounded-[1.8vh]"
-                    style={{ background: "rgba(74,77,85,0.25)" }}
+                    style={{
+                      background: "rgba(30,34,51,0.3)",
+                      border: "1px solid rgba(148,163,184,0.06)",
+                    }}
                   />
                 );
               }
@@ -438,7 +469,9 @@ function PageNav({
             style={{
               width: i === current ? "2.8vh" : "1.6vh",
               height: "1.6vh",
-              background: i === current ? "#87CEEB" : "rgba(255,255,255,0.2)",
+              background: i === current ? "#22d3ee" : "#334155",
+              boxShadow:
+                i === current ? "0 0 0.8vh rgba(34,211,238,0.5)" : undefined,
             }}
           />
         ))}
@@ -583,7 +616,9 @@ function NoticeCard({
       onClick={() => onSelect(notice)}
       className="relative flex w-full items-center overflow-hidden text-left transition-transform active:scale-[0.99]"
       style={{
-        background: "#4a4d55",
+        background:
+          "linear-gradient(#1a2233, #1a2233) padding-box, linear-gradient(135deg, rgba(34,211,238,0.35), rgba(96,165,250,0.25), rgba(167,139,250,0.35)) border-box",
+        border: "1px solid transparent",
         padding: "0 2.5vh",
         borderRadius: "1.8vh",
         boxShadow: isExpiringSoon ? "inset 0 0 0 0.3vh #facc15" : undefined,
@@ -630,7 +665,7 @@ function LinkCard({ url }: { url: string }) {
     <button
       type="button"
       onClick={() => openExternal(url)}
-      className="flex w-full items-center rounded-[1vh] border border-slate-700/60 bg-[#3a3d44] transition-all hover:border-cyan-400/40 hover:bg-[#43464e]"
+      className="flex w-full items-center rounded-[1vh] border border-slate-700/60 bg-[#1e293b] transition-all hover:border-cyan-400/30 hover:bg-[#243044]"
       style={{
         marginBottom: "1.4vh",
         padding: "1.4vh 1.4vh",
@@ -725,10 +760,15 @@ function NoticeDetailOverlay({
       />
       <motion.div
         layoutId={`notice-card-${notice.id}`}
+        transition={{
+          layout: { duration: 0.28, ease: [0.22, 0.61, 0.36, 1] },
+        }}
         className="relative flex w-full flex-col overflow-hidden"
         style={{
           height: "100%",
-          background: "#4a4d55",
+          background:
+            "linear-gradient(#0f1219, #0f1219) padding-box, linear-gradient(135deg, rgba(34,211,238,0.45), rgba(96,165,250,0.3), rgba(167,139,250,0.45)) border-box",
+          border: "1.5px solid transparent",
           borderRadius: "1.8vh",
           padding: "2.5vh 2.5vh 2vh",
         }}
@@ -821,7 +861,10 @@ function EmptySlots() {
         <div
           key={i}
           className="rounded-[1.8vh]"
-          style={{ background: "rgba(74,77,85,0.25)" }}
+          style={{
+            background: "rgba(30,34,51,0.3)",
+            border: "1px solid rgba(148,163,184,0.06)",
+          }}
         />
       ))}
     </div>
