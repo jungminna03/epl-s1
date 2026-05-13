@@ -24,6 +24,7 @@ import { createWidgetWindow } from "./widget-window";
 
 import path from "node:path";
 import os from "node:os";
+import { exec } from "node:child_process";
 
 log.initialize();
 log.info(`[main] EPL widget 시작 (dev=${APP_CONFIG.isDev})`);
@@ -210,6 +211,34 @@ p { font-size:12px; opacity:0.7; line-height:1.6; }
   setTimeout(() => app.quit(), 30_000);
 }
 
+/* ─── 창 Z-Order 헬퍼 ─── */
+
+/**
+ * Windows 한정: SetWindowPos(HWND_BOTTOM, ...) 로 위젯 창을 모든 다른 창 뒤로
+ * 보낸다. Electron BrowserWindow API 에는 "맨 뒤로" 가 없어서 PowerShell 로
+ * user32!SetWindowPos 를 직접 호출한다.
+ */
+function sendWindowToBack(win: BrowserWindow) {
+  win.setAlwaysOnTop(false);
+  win.blur();
+  if (process.platform !== "win32") return;
+
+  const handle = win.getNativeWindowHandle();
+  const hwnd =
+    handle.length >= 8
+      ? handle.readBigInt64LE(0).toString()
+      : handle.readInt32LE(0).toString();
+
+  // HWND_BOTTOM = 1, SWP_NOSIZE|SWP_NOMOVE|SWP_NOACTIVATE = 0x0013
+  const script =
+    `Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public class W { [DllImport(\"user32.dll\")] public static extern bool SetWindowPos(IntPtr h, IntPtr a, int x, int y, int c, int d, uint f); }'; ` +
+    `[W]::SetWindowPos([IntPtr]${hwnd}, [IntPtr]1, 0, 0, 0, 0, 0x13) | Out-Null`;
+  const encoded = Buffer.from(script, "utf16le").toString("base64");
+  exec(`powershell -NoProfile -EncodedCommand ${encoded}`, (err) => {
+    if (err) log.warn(`[main] sendWindowToBack 실패: ${err.message}`);
+  });
+}
+
 /* ─── IPC 핸들러 ─── */
 
 function registerIpc(
@@ -269,6 +298,11 @@ function registerIpc(
       win.setAlwaysOnTop(false);
       win.blur();
     }
+  });
+  ipcMain.on("widget:send-to-back", () => {
+    const win = getWindow();
+    if (!win) return;
+    sendWindowToBack(win);
   });
   ipcMain.on("widget:set-opacity", (_e, value: number) => {
     if (typeof value !== "number") return;

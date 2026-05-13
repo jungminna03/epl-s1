@@ -8,7 +8,12 @@ import {
   useRef,
   useState,
 } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import {
+  AnimatePresence,
+  motion,
+  useAnimationFrame,
+  useMotionValue,
+} from "framer-motion";
 import { db, type Notice } from "@/lib/instant";
 import { getEffectivePeriod, isNoticeVisible } from "@/lib/categories";
 import { fireCheckEffect } from "@/lib/check-effects";
@@ -27,14 +32,14 @@ import {
  * 위젯이 사용자에게 의미있게 변할 때 같은 달 안에서 N 을 증가시키고,
  * 달이 바뀌면 N 을 1 로 리셋. 사람이 직접 갱신한다.
  */
-const WIDGET_VERSION = "V.2026.5.2";
+const WIDGET_VERSION = "V.2026.5.5";
 
 const CLOCK_INTERVAL_MS = 30_000;
 const PAGE_SIZE = 4;
 const MAX_PAGES = 3;
 const MAX_NOTICES = PAGE_SIZE * MAX_PAGES;
 const PAGE_CYCLE_MS = 10_000;
-const MARQUEE_SPEED_PX_PER_S = 30;
+const MARQUEE_SPEED_PX_PER_S = 80;
 const MARQUEE_GAP_VH = 4;
 const EXPIRING_SOON_MS = 24 * 60 * 60 * 1000;
 const ALWAYS_ON_TOP_PULSE_MS = 80;
@@ -43,6 +48,7 @@ const ALWAYS_ON_TOP_PULSE_MS = 80;
 
 type EplApi = {
   setAlwaysOnTop?: (value: boolean) => void;
+  sendToBack?: () => void;
   show?: () => void;
   openExternal?: (url: string) => void;
 };
@@ -83,10 +89,18 @@ function bringToFront() {
 }
 
 /**
- * 위젯 창을 맨 뒤로 보낸다. 다음 정각 리셋 사이클에서 useReadState 가 bringToFront 로 복귀시킴.
+ * 위젯 창을 맨 뒤로 보낸다. main 에서 Windows SetWindowPos(HWND_BOTTOM) 를 호출해
+ * 모든 일반 창 뒤로 z-order 를 내림. 다음 정각 리셋 사이클에서 useReadState 가
+ * bringToFront 로 복귀시킴.
  */
 function sendToBack() {
-  getEpl()?.setAlwaysOnTop?.(false);
+  const epl = getEpl();
+  if (epl?.sendToBack) {
+    epl.sendToBack();
+  } else {
+    // 구버전 셸 폴백: alwaysOnTop 만 해제
+    epl?.setAlwaysOnTop?.(false);
+  }
 }
 
 /* ─── 읽음 상태 훅 ────────────────────────────────── */
@@ -469,7 +483,10 @@ function NavArrow({
 function MarqueeTitle({ text }: { text: string }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const textRef = useRef<HTMLSpanElement>(null);
-  const [overflowPx, setOverflowPx] = useState(0);
+  const [state, setState] = useState<{ over: boolean; distance: number }>({
+    over: false,
+    distance: 0,
+  });
 
   useLayoutEffect(() => {
     function measure() {
@@ -478,7 +495,14 @@ function MarqueeTitle({ text }: { text: string }) {
       if (!c || !t) return;
       const containerWidth = c.clientWidth;
       const textWidth = t.scrollWidth;
-      setOverflowPx(Math.max(0, textWidth - containerWidth));
+      const over = textWidth > containerWidth;
+      const gapPx = (MARQUEE_GAP_VH / 100) * window.innerHeight;
+      const distance = over ? textWidth + gapPx : 0;
+      setState((prev) =>
+        prev.over === over && Math.abs(prev.distance - distance) < 0.5
+          ? prev
+          : { over, distance },
+      );
     }
     measure();
     const ro = new ResizeObserver(measure);
@@ -486,9 +510,21 @@ function MarqueeTitle({ text }: { text: string }) {
     return () => ro.disconnect();
   }, [text]);
 
-  const isOverflow = overflowPx > 0;
+  // framer-motion 의 keyframes animate 대신 useAnimationFrame 으로 직접 모션값을
+  // 매 프레임 갱신한다. 부모 motion.button 의 layoutId layout 트래킹이 자식의
+  // transform animate 를 reset 하는 충돌을 피하기 위함.
+  const x = useMotionValue(0);
+  const startRef = useRef<number | null>(null);
+  useAnimationFrame((t) => {
+    if (!state.over || state.distance <= 0) return;
+    if (startRef.current == null) startRef.current = t;
+    const elapsedS = (t - startRef.current) / 1000;
+    const cycleS = state.distance / MARQUEE_SPEED_PX_PER_S;
+    const phase = (elapsedS % cycleS) / cycleS;
+    x.set(-phase * state.distance);
+  });
 
-  if (!isOverflow) {
+  if (!state.over) {
     return (
       <div ref={containerRef} className="min-w-0 flex-1">
         <span
@@ -502,22 +538,11 @@ function MarqueeTitle({ text }: { text: string }) {
     );
   }
 
-  const cycleDistance = overflowPx + 16;
-  const duration = cycleDistance / MARQUEE_SPEED_PX_PER_S;
-
   return (
     <div ref={containerRef} className="relative min-w-0 flex-1 overflow-hidden">
       <motion.div
         className="flex shrink-0"
-        style={{ gap: `${MARQUEE_GAP_VH}vh`, width: "max-content" }}
-        animate={{ x: [0, -cycleDistance] }}
-        transition={{
-          duration,
-          ease: "linear",
-          repeat: Infinity,
-          repeatType: "loop",
-          repeatDelay: 1,
-        }}
+        style={{ gap: `${MARQUEE_GAP_VH}vh`, width: "max-content", x }}
       >
         <span
           ref={textRef}
