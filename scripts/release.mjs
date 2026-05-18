@@ -5,12 +5,12 @@
  * 사용법:
  *   1) package.json 의 version 을 올린다 (npm version patch --no-git-tag-version)
  *   2) commit 후
- *   3) npm run release  →  git tag v<version> + git push origin v<version>
+ *   3) npm run release  →  git tag v<version> + git push github v<version>
  *   4) .github/workflows/release.yml 이 자동으로 Windows runner 에서 빌드 + release 생성/갱신
  *
  * 운영:
  *   - 같은 버전 재실행: tag 가 이미 있으면 push 단계에서 거부됨.
- *     로컬에서 git tag -d v<version> + git push origin :refs/tags/v<version> 으로 정리 후 재시도.
+ *     로컬에서 git tag -d v<version> + git push github :refs/tags/v<version> 으로 정리 후 재시도.
  *   - 진행 상황: gh run watch 또는 GitHub Actions 탭.
  */
 
@@ -45,8 +45,8 @@ console.log(`▶ 버전: ${VERSION} (태그 ${TAG})`);
 // 1) 로컬 tag 생성 (이미 있으면 git 이 거부 — 사용자가 정리해야 함)
 run("git", ["tag", TAG]);
 
-// 2) origin 으로 tag push → workflow 트리거
-run("git", ["push", "origin", TAG]);
+// 2) github 으로 tag push → workflow 트리거
+run("git", ["push", "github", TAG]);
 
 console.log("\n✓ 트리거 완료.");
 console.log(`   Actions: https://github.com/${OWNER_REPO}/actions`);
