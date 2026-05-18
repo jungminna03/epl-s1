@@ -38,11 +38,11 @@ Run: `gh auth status`
 
 Expected: `Logged in to github.com account jungminna03` 표시 + 스코프에 `repo` 포함
 
-- [ ] **Step P3: 새 인스톨러 빌드 환경 확인 (Windows 타깃)**
+- [ ] **Step P3: 빌드 환경 결정 (Windows 타깃)**
 
-Run: `node -e "console.log(process.platform)"`
+`electron-builder --win` 은 macOS 에서 wine 필요. macOS Tahoe (15.x) 에서 `wine-stable` cask 가 deprecated (2026-09-01 비활성화 예정) + Gatekeeper 차단 + Rosetta 2 + sudo 비밀번호 등으로 로컬 빌드 길이 막힘.
 
-만약 macOS 면: `electron-builder --win` 은 wine 필요. `brew install --cask --no-quarantine wine-stable` 또는 GitHub Actions 로 빌드 (별도). 이 plan 은 wine 셋업이 되어있다고 가정.
+→ **이 plan 은 GitHub Actions Windows runner 빌드를 채택.** public repo 라 무제한 무료, native Windows 라 wine 불필요. 자세한 셋업은 Task 4 에서.
 
 ---
 
@@ -378,76 +378,228 @@ Run: `rm -rf /tmp/epl-s1-gh-mirror`
 
 ---
 
-### Task 4: 버전 bump 후 첫 GitHub Release 만들기
+### Task 4: GitHub Actions Windows runner 워크플로우 셋업 + 첫 release 트리거
+
+**왜 GitHub Actions:** macOS 에서 wine 길이 막힘 (deprecated + sudo). public repo 라 Actions 무제한 무료, Windows runner 면 native 빌드라 wine 불필요.
 
 **Files:**
+- Create: `.github/workflows/release.yml`
+- Modify: `scripts/release.mjs` (간소화 — tag push 만)
 - Modify: `package.json` (version 필드만)
 
-- [ ] **Step 1: 버전 bump (0.2.0 → 0.2.1)**
+#### Step 1: `.github/workflows/release.yml` 작성
 
-Run: `npm version patch --no-git-tag-version`
+```yaml
+name: Build & Release
 
-Expected: `package.json` 의 `version` 이 `"0.2.1"` 로 변경됨. (`--no-git-tag-version` 으로 자동 태그/커밋 생성 차단 — 우리는 직접 커밋.)
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release 태그 (예: v0.2.1). 비우면 푸시된 태그 사용."
+        required: false
 
-- [ ] **Step 2: 변경 확인**
+permissions:
+  contents: write
 
-Run: `git diff package.json`
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
 
-Expected: `version` 한 줄만 바뀜.
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
 
-- [ ] **Step 3: Commit (버전 bump)**
+      - name: Install deps
+        run: npm ci
+
+      - name: Build electron-builder (Windows)
+        run: npm run electron:tsc && npx electron-builder --win --publish never
+
+      - name: Resolve tag
+        id: tag
+        shell: bash
+        run: |
+          if [ -n "${{ github.event.inputs.tag }}" ]; then
+            echo "tag=${{ github.event.inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${GITHUB_REF##*/}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload to GitHub Release (create or clobber)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          TAG="${{ steps.tag.outputs.tag }}"
+          ASSETS=$(ls release/*.exe release/*.exe.blockmap release/latest.yml 2>/dev/null)
+          if ! gh release view "$TAG" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            gh release create "$TAG" --repo "${{ github.repository }}" --title "$TAG" --notes "EPL 위젯 $TAG" --latest $ASSETS
+          else
+            gh release upload "$TAG" --repo "${{ github.repository }}" --clobber $ASSETS
+          fi
+```
+
+#### Step 2: `scripts/release.mjs` 간소화
+
+기존 빌드+업로드 로직 제거. tag push 만 함.
+
+```js
+#!/usr/bin/env node
+/**
+ * EPL 위젯 릴리즈 — GitHub Actions workflow 트리거.
+ *
+ * 사용법:
+ *   1) package.json 의 version 을 올린다 (npm version patch --no-git-tag-version)
+ *   2) commit 후
+ *   3) npm run release  →  git tag v<version> + git push origin v<version>
+ *   4) .github/workflows/release.yml 이 자동으로 Windows runner 에서 빌드 + release 생성/갱신
+ *
+ * 운영:
+ *   - 같은 버전 재실행: tag 가 이미 있으면 push 단계에서 거부됨.
+ *     로컬에서 git tag -d v<version> + git push origin :refs/tags/v<version> 으로 정리 후 재시도.
+ *   - 진행 상황: gh run watch 또는 GitHub Actions 탭.
+ */
+
+import { spawnSync } from "node:child_process";
+import { resolve, join } from "node:path";
+import { readFileSync } from "node:fs";
+
+const ROOT = resolve(import.meta.dirname, "..");
+const PKG_PATH = join(ROOT, "package.json");
+const OWNER_REPO = "jungminna03/epl-s1";
+
+function run(cmd, args) {
+  console.log(`\n▶ ${cmd} ${args.join(" ")}`);
+  const r = spawnSync(cmd, args, {
+    stdio: "inherit",
+    cwd: ROOT,
+    shell: process.platform === "win32",
+  });
+  if (r.status !== 0) {
+    console.error(`✖ ${cmd} 실패 (exit ${r.status})`);
+    process.exit(r.status ?? 1);
+  }
+}
+
+console.log("=== EPL 위젯 릴리즈 (GitHub Actions 트리거) ===");
+
+const pkg = JSON.parse(readFileSync(PKG_PATH, "utf8"));
+const VERSION = pkg.version;
+const TAG = `v${VERSION}`;
+console.log(`▶ 버전: ${VERSION} (태그 ${TAG})`);
+
+// 1) 로컬 tag 생성 (이미 있으면 git 이 거부 — 사용자가 정리해야 함)
+run("git", ["tag", TAG]);
+
+// 2) origin 으로 tag push → workflow 트리거
+run("git", ["push", "origin", TAG]);
+
+console.log("\n✓ 트리거 완료.");
+console.log(`   Actions: https://github.com/${OWNER_REPO}/actions`);
+console.log(`   Release (빌드 끝나면): https://github.com/${OWNER_REPO}/releases/tag/${TAG}`);
+console.log(`   진행 상황 보기: gh run watch --repo ${OWNER_REPO}`);
+```
+
+#### Step 3: 버전 bump + commit + workflow + release.mjs 변경 한 번에 커밋
 
 ```bash
-git add package.json package-lock.json 2>/dev/null
+npm version patch --no-git-tag-version  # 0.2.0 → 0.2.1
+git add .github/workflows/release.yml scripts/release.mjs package.json
 git commit -m "$(cat <<'EOF'
-[UPDATE] 위젯 0.2.1 — GitHub Releases 호스팅 첫 배포
+[BUILD] GitHub Actions Windows runner 로 release 빌드 이전
+
+macOS 의 wine-stable 이 deprecated + Gatekeeper 차단 + sudo 의존성으로 로컬 빌드 길 막힘.
+대신 .github/workflows/release.yml 추가 — public repo Actions 무제한 무료, Windows runner 면 wine 불필요.
+release.mjs 는 git tag push 만 하는 트리거 스크립트로 간소화.
+버전 0.2.1.
 
 Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
 )"
 ```
 
-(만약 `npm version` 이 `package-lock.json` 도 건드렸으면 같이 add. 안 건드렸으면 add 에서 무시됨.)
+#### Step 4: 코드 push (main 아님 — 현재 브랜치)
 
-- [ ] **Step 4: 릴리즈 실행**
+```bash
+git push -u origin chore/github-releases-migration
+```
 
-Run: `npm run release`
+⚠️ 이건 작업 브랜치 push. **workflow 는 아직 트리거 안 됨** (tag push 가 트리거).
 
-Expected:
-1. `electron:release` 가 `release/` 에 `*.exe`, `*.exe.blockmap`, `latest.yml` 생성
-2. `gh release create v0.2.1 ...` 호출 → GitHub Release 생성, 자산 3개 업로드
-3. `vercel --prod --yes` 호출 → 웹 배포
+⚠️ jungminna03/epl-s1 의 **main 에 워크플로우 파일이 있어야** Actions 가 동작. main 에 머지 또는 cherry-pick 필요.
 
-⚠️ macOS 에서 `electron-builder --win` 이 wine 없으면 실패함. 그 경우 Pre-flight P3 으로 돌아가서 wine 셋업 또는 GitHub Actions 빌드 셋업.
+#### Step 5: workflow 파일을 main 에 반영
 
-- [ ] **Step 5: GitHub Releases 페이지 확인**
+GitHub Actions 는 default branch (main) 의 workflow 정의를 따른다. 현재 main 에는 README + widget-config.json 만 있고 workflow 가 없음.
+
+옵션 A — cherry-pick:
+```bash
+# 임시 디렉토리 clone
+cd /tmp && git clone https://github.com/jungminna03/epl-s1.git epl-s1-main-update
+cd epl-s1-main-update
+# release.yml 만 복사
+mkdir -p .github/workflows
+cp /Users/nyxrux62/Documents/GitHub/epl-s1/.github/workflows/release.yml .github/workflows/release.yml
+git add .github/workflows/release.yml
+git -c user.email=jungminna03@gmail.com -c user.name=jungminna03 commit -m "Add release workflow (Windows runner)"
+git push origin main
+cd -
+```
+
+옵션 B — 동시에 같은 commit 의 source 코드도 main 으로? 안 함. main 은 release 호스팅 전용. workflow 만 추가.
+
+#### Step 6: 첫 release 트리거
+
+본 저장소(chore/github-releases-migration 브랜치)에서:
+
+```bash
+npm run release
+```
+
+내부적으로 `git tag v0.2.1 && git push origin v0.2.1`. push 와 함께 GitHub Actions 의 workflow 가 트리거됨.
+
+⚠️ workflow 가 checkout 하는 코드는 **tag 가 가리키는 commit** 의 트리. 즉 chore/github-releases-migration 의 현재 코드가 들어감. main 에는 워크플로우만 있으면 충분.
+
+#### Step 7: 빌드 진행 모니터링
+
+```bash
+gh run watch --repo jungminna03/epl-s1
+```
+
+또는 https://github.com/jungminna03/epl-s1/actions
+
+Expected: ~5-10분 후 release 생성/자산 업로드 성공.
+
+#### Step 8: GitHub Releases 페이지 확인
 
 브라우저: https://github.com/jungminna03/epl-s1/releases/tag/v0.2.1
 
 Expected: `latest.yml`, `EPL-공지사항-Setup-0.2.1.exe`, `EPL-공지사항-Setup-0.2.1.exe.blockmap` 3개 자산 첨부됨. "Latest" 배지 붙음.
 
-- [ ] **Step 6: latest.yml 외부 접근 검증**
+#### Step 9: latest.yml 외부 접근 검증
 
-Run: `curl -s "https://github.com/jungminna03/epl-s1/releases/latest/download/latest.yml" | head -20`
+```bash
+curl -s "https://github.com/jungminna03/epl-s1/releases/latest/download/latest.yml" | head -20
+```
 
 Expected: yml 본문 — `version: 0.2.1`, `files:` 아래 `url: EPL-공지사항-Setup-0.2.1.exe`, `sha512: ...` 등.
 
-- [ ] **Step 7: 인스톨러 자산 헤더 확인 (Content-Length)**
+#### Step 10: 인스톨러 자산 헤더 확인 (Content-Length)
 
-Run:
 ```bash
-curl -sIL -o /dev/null -w "%{http_code} size=%{size_download} ctype=%{content_type} clen=%{size_upload}\n" \
+curl -sIL -o /dev/null -w "%{http_code} size=%{size_download} ctype=%{content_type}\n" \
   "https://github.com/jungminna03/epl-s1/releases/latest/download/EPL-공지사항-Setup-0.2.1.exe"
 ```
 
-또는 마지막 응답 헤더만 보고 싶으면:
-```bash
-curl -sIL "https://github.com/jungminna03/epl-s1/releases/latest/download/EPL-공지사항-Setup-0.2.1.exe" | awk 'BEGIN{RS=""} END{print}'
-```
-
-Expected: 최종 응답 `HTTP/2 200`, `Content-Length: ~163840000` (약 156MB), `Content-Type: application/octet-stream`.
-
-이게 확인되어야 electron-updater 가 정상 다운로드 가능 (HTML 인터스티셜 같은 거 없이 raw 바이너리 응답).
+Expected: 최종 응답 `200`, `size=` 약 156MB, `ctype=application/octet-stream`.
 
 ---
 
