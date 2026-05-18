@@ -41,9 +41,9 @@ nsis:
   installerIcon: electron-resources/icon.ico
   uninstallerIcon: electron-resources/icon.ico
 
-# 자동 업데이트 — Vercel Blob Storage 를 generic provider 로 사용.
-# (Vercel 정적 파일은 100MB 제한이 있어 156MB 인스톨러를 못 받음 → Blob 사용)
+# 자동 업데이트 — GitHub Releases (public repo, 무료, 무제한 다운로드).
+# generic provider 유지 — releases/latest/download URL 이 정적 파일 서버 패턴 그대로 동작.
 publish:
   - provider: generic
-    url: https://m3vzlavafd1gvxn2.public.blob.vercel-storage.com
+    url: https://github.com/jungminna03/epl-s1/releases/latest/download
     channel: latest
