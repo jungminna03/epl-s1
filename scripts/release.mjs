@@ -21,7 +21,7 @@
  */
 
 import { spawnSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { resolve, join } from "node:path";
 
 const ROOT = resolve(import.meta.dirname, "..");
@@ -91,8 +91,8 @@ if (targets.length === 0) {
 
 console.log(`\n▶ 업로드 대상 (${targets.length}개):`);
 for (const p of targets) {
-  const stat = readFileSync(p);
-  console.log(`  • ${p.split("/").pop()} (${(stat.length / 1024 / 1024).toFixed(1)} MB)`);
+  const stat = statSync(p);
+  console.log(`  • ${p.split("/").pop()} (${(stat.size / 1024 / 1024).toFixed(1)} MB)`);
 }
 
 // 4) GitHub Release 생성 (없으면) 또는 자산만 덮어쓰기 (있으면)
