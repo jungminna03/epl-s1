@@ -213,9 +213,9 @@ function Dashboard({ onSignOut }: { onSignOut: () => void }) {
   }
 
   return (
-    <main className="min-h-screen">
+    <main className="min-h-screen overflow-x-hidden">
       <header className="border-b border-white/5 bg-zinc-950/80 backdrop-blur">
-        <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-5">
+        <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-4 lg:px-6 lg:py-5">
           <div>
             <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
               Admin Dashboard
@@ -243,9 +243,9 @@ function Dashboard({ onSignOut }: { onSignOut: () => void }) {
         </div>
       </header>
 
-      <div className="mx-auto grid w-full max-w-6xl gap-6 px-6 py-8 lg:grid-cols-[1fr_400px]">
+      <div className="mx-auto grid w-full max-w-6xl grid-cols-1 gap-6 px-4 py-6 lg:grid-cols-[1fr_400px] lg:px-6 lg:py-8">
         {/* List */}
-        <section>
+        <section className="order-2 lg:order-1">
           <SectionHeader
             title="등록된 공지"
             subtitle={`총 ${notices.length}건`}
@@ -274,8 +274,8 @@ function Dashboard({ onSignOut }: { onSignOut: () => void }) {
         </section>
 
         {/* Form */}
-        <aside className="lg:sticky lg:top-6 lg:self-start">
-          <div className="rounded-2xl border border-white/5 bg-zinc-900/60 p-6 backdrop-blur">
+        <aside className="order-1 w-full lg:order-2 lg:sticky lg:top-6 lg:self-start">
+          <div className="mx-auto w-full max-w-lg rounded-2xl border border-white/5 bg-zinc-900/60 p-4 backdrop-blur lg:max-w-none lg:p-6">
             <SectionHeader
               title={editing ? "공지 수정" : "새 공지 작성"}
               subtitle={editing ? "선택된 공지를 수정합니다" : undefined}
@@ -452,7 +452,7 @@ function CategoryPicker({
   }
 
   return (
-    <div className="grid grid-cols-4 gap-2">
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
       {CATEGORIES.map((c) => {
         const s = CATEGORY_STYLES[c];
         const active = selected.includes(c);
@@ -506,7 +506,7 @@ function NoticeRow({
       <div className={`absolute inset-y-0 left-0 w-1 ${s.dot}`} />
       <div className="flex items-start justify-between gap-3 pl-2">
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {cats.map((c) => {
               const cs = CATEGORY_STYLES[c];
               return (
@@ -539,16 +539,16 @@ function NoticeRow({
             </p>
           )}
         </div>
-        <div className="flex shrink-0 flex-col gap-1.5">
+        <div className="flex shrink-0 flex-row gap-1.5 lg:flex-col">
           <button
             onClick={onEdit}
-            className="rounded-md border border-white/10 px-2.5 py-1 text-[11px] text-zinc-300 hover:border-white/30 hover:text-white"
+            className="rounded-md border border-white/10 px-3 py-2 text-xs text-zinc-300 hover:border-white/30 hover:text-white lg:px-2.5 lg:py-1 lg:text-[11px]"
           >
             수정
           </button>
           <button
             onClick={onDelete}
-            className="rounded-md border border-white/10 px-2.5 py-1 text-[11px] text-zinc-400 hover:border-red-500/60 hover:text-red-300"
+            className="rounded-md border border-white/10 px-3 py-2 text-xs text-zinc-400 hover:border-red-500/60 hover:text-red-300 lg:px-2.5 lg:py-1 lg:text-[11px]"
           >
             삭제
           </button>
