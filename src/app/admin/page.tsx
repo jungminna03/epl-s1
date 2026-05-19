@@ -9,7 +9,7 @@ import {
   type Category,
   type Notice,
 } from "@/lib/instant";
-import { CATEGORY_STYLES, DEFAULT_STYLE, formatAbsolute, parseCategories } from "@/lib/categories";
+import { CATEGORY_STYLES, DEFAULT_STYLE, formatAbsolute, getEndDate, parseCategories } from "@/lib/categories";
 
 /**
  * /admin
@@ -144,14 +144,17 @@ function Dashboard({ onSignOut }: { onSignOut: () => void }) {
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [submitting, setSubmitting] = useState(false);
   const [mobileView, setMobileView] = useState<"list" | "form">("list");
-  const [layoutMode, setLayoutMode] = useState<"desktop" | "touch" | null>(null);
+  const [layoutMode, setLayoutMode] = useState<"desktop" | "touch">(
+    typeof window !== "undefined" ? (window.innerWidth >= 1280 ? "desktop" : "touch") : "touch"
+  );
 
   useEffect(() => {
-    const mql = window.matchMedia("(hover: hover) and (pointer: fine)");
-    setLayoutMode(mql.matches ? "desktop" : "touch");
-    const handler = (e: MediaQueryListEvent) => setLayoutMode(e.matches ? "desktop" : "touch");
-    mql.addEventListener("change", handler);
-    return () => mql.removeEventListener("change", handler);
+    function handleResize() {
+      setLayoutMode(window.innerWidth >= 1280 ? "desktop" : "touch");
+    }
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
   }, []);
 
   const editing = form.id !== null;
@@ -293,17 +296,6 @@ function Dashboard({ onSignOut }: { onSignOut: () => void }) {
               <SectionHeader
                 title={editing ? "공지 수정" : "새 공지 작성"}
                 subtitle={editing ? "선택된 공지를 수정합니다" : undefined}
-                right={
-                  editing ? (
-                    <button
-                      onClick={reset}
-                      type="button"
-                      className="text-xs text-zinc-400 hover:text-zinc-200"
-                    >
-                      + 새 공지로 전환
-                    </button>
-                  ) : null
-                }
               />
               <NoticeForm
                 form={form}
@@ -312,6 +304,7 @@ function Dashboard({ onSignOut }: { onSignOut: () => void }) {
                 submitting={submitting}
                 onSubmit={handleSubmit}
                 onReset={reset}
+                onBack={editing ? () => { reset(); setMobileView("list"); } : undefined}
               />
             </div>
           </aside>
@@ -476,7 +469,7 @@ function NoticeRow({
               {" · "}
               {notice.startDate ? msToDate(notice.startDate) : msToDate(notice.createdAt)}
               {" ~ "}
-              {notice.endDate ? msToDate(notice.endDate) : "무기한"}
+              {msToDate(getEndDate(notice))}
             </span>
           </div>
           <h3 className="mt-1.5 truncate text-sm font-semibold text-zinc-100">
@@ -528,6 +521,7 @@ function NoticeForm({
   submitting,
   onSubmit,
   onReset,
+  onBack,
 }: {
   form: FormState;
   setForm: React.Dispatch<React.SetStateAction<FormState>>;
@@ -535,6 +529,7 @@ function NoticeForm({
   submitting: boolean;
   onSubmit: (e: React.FormEvent) => void;
   onReset: () => void;
+  onBack?: () => void;
 }) {
   return (
     <form onSubmit={onSubmit} className="mt-5 space-y-4">
@@ -595,7 +590,7 @@ function NoticeForm({
         </div>
         {!form.endDate && (
           <p className="mt-1 text-[11px] text-zinc-500">
-            종료일을 비우면 무기한 게시됩니다.
+            종료일을 비우면 시작일부터 7일간 게시됩니다.
           </p>
         )}
       </Field>
@@ -615,10 +610,10 @@ function NoticeForm({
         {editing ? (
           <button
             type="button"
-            onClick={onReset}
+            onClick={onBack || onReset}
             className="rounded-xl border border-white/10 px-4 py-2.5 text-sm text-zinc-300 hover:border-white/30"
           >
-            취소
+            {onBack ? "취소" : "새 공지로 전환"}
           </button>
         ) : null}
       </div>

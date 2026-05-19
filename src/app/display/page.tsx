@@ -100,6 +100,14 @@ function SignageLayout({ notices, now }: { notices: Notice[]; now: number }) {
   const totalPages = Math.max(1, Math.ceil(notices.length / PAGE_SIZE));
   const [pageIdx, setPageIdx] = useState(0);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    function check() { setIsMobile(window.innerWidth < 1280); }
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
 
   // Keep pageIdx in range when notices change
   useEffect(() => {
@@ -202,6 +210,15 @@ function SignageLayout({ notices, now }: { notices: Notice[]; now: number }) {
     ? notices.find((n) => n.id === expandedId) ?? null
     : null;
 
+  if (isMobile) {
+    return (
+      <MobileDisplay
+        notices={notices}
+        now={now}
+      />
+    );
+  }
+
   return (
     <div
       className="overflow-hidden bg-[#0f1219]"
@@ -213,7 +230,7 @@ function SignageLayout({ notices, now }: { notices: Notice[]; now: number }) {
         style={{ width: "100%", height: "100%" }}
       >
         <PinToggle />
-        <TopBar now={now} />
+        <TopBar now={now} isMobile={isMobile} />
 
         {/* Content area: grid + overlay */}
         <div
@@ -395,7 +412,7 @@ function PinToggle() {
 
 /* ─── Top Bar ─── */
 
-function TopBar({ now }: { now: number }) {
+function TopBar({ now, isMobile }: { now: number; isMobile?: boolean }) {
   const d = new Date(now);
   const date = `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일`;
   const weekday = ["일", "월", "화", "수", "목", "금", "토"][d.getDay()];
@@ -406,49 +423,51 @@ function TopBar({ now }: { now: number }) {
   return (
     <header
       className="flex shrink-0 items-center justify-between border-b"
-      style={{ borderColor: "rgba(34,211,238,0.06)", padding: "1.5vh 3vh" }}
+      style={{ borderColor: "rgba(34,211,238,0.06)", padding: isMobile ? "12px 16px" : "1.5vh 3vh" }}
     >
-      <div className="flex items-center" style={{ gap: "1vh" }}>
+      <div className="flex items-center" style={{ gap: isMobile ? "8px" : "1vh" }}>
         <div
           className="rounded-full bg-cyan-400"
           style={{
-            width: "0.7vh",
-            height: "0.7vh",
+            width: isMobile ? "8px" : "0.7vh",
+            height: isMobile ? "8px" : "0.7vh",
             boxShadow: "0 0 0.6vh rgba(34,211,238,0.6)",
             animation: "livePulse 2s ease-in-out infinite",
           }}
         />
-        <span style={{ fontSize: "2.2vh", letterSpacing: "0.02vh" }}>
+        <span style={{ fontSize: isMobile ? "16px" : "2.2vh", letterSpacing: "0.02vh" }}>
           <span
             className="font-extrabold"
             style={{
               background: "linear-gradient(90deg, #22d3ee, #60a5fa, #a78bfa)",
               WebkitBackgroundClip: "text",
               WebkitTextFillColor: "transparent",
-              filter: "drop-shadow(0 0 0.8vh rgba(96,165,250,0.4))",
+              filter: isMobile ? "none" : "drop-shadow(0 0 0.8vh rgba(96,165,250,0.4))",
             }}
           >
             게임소프트웨어학과
           </span>
-          <span
-            className="font-light text-slate-400"
-            style={{ marginLeft: "0.5vh", fontSize: "0.85em" }}
-          >
-            공지사항
-          </span>
+          {!isMobile && (
+            <span
+              className="font-light text-slate-400"
+              style={{ marginLeft: "0.5vh", fontSize: "0.85em" }}
+            >
+              공지사항
+            </span>
+          )}
         </span>
       </div>
-      <div className="flex items-center" style={{ gap: "1vh" }}>
+      <div className="flex items-center" style={{ gap: isMobile ? "12px" : "1vh" }}>
         <div
           className="text-right text-slate-600"
-          style={{ fontSize: "1.3vh", lineHeight: 1.4 }}
+          style={{ fontSize: isMobile ? "11px" : "1.3vh", lineHeight: 1.4 }}
         >
           <div>{date}</div>
           <div>{weekday}요일</div>
         </div>
         <span
           className="font-extrabold text-slate-50 leading-none tracking-tighter"
-          style={{ fontSize: "3.8vh", fontVariantNumeric: "tabular-nums" }}
+          style={{ fontSize: isMobile ? "24px" : "3.8vh", fontVariantNumeric: "tabular-nums" }}
         >
           {time}
         </span>
@@ -907,5 +926,249 @@ function PageIndicator({ total, current }: { total: number; current: number }) {
         />
       ))}
     </div>
+  );
+}
+
+/* ─── Mobile Display ─── */
+
+function MobileDisplay({ notices, now }: { notices: Notice[]; now: number }) {
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(0);
+
+  const totalPages = Math.max(1, Math.ceil(notices.length / PAGE_SIZE));
+  const paginated = notices.slice(
+    currentPage * PAGE_SIZE,
+    (currentPage + 1) * PAGE_SIZE,
+  );
+
+  // Auto cycle every 10s
+  useEffect(() => {
+    if (totalPages <= 1) return;
+    const id = setInterval(() => {
+      setCurrentPage((p) => (p + 1) % totalPages);
+    }, CYCLE_MS);
+    return () => clearInterval(id);
+  }, [totalPages]);
+
+  const selected = selectedId
+    ? notices.find((n) => n.id === selectedId) ?? null
+    : null;
+
+  const d = new Date(now);
+  const dateStr = `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일`;
+  const weekday = ["일", "월", "화", "수", "목", "금", "토"][d.getDay()];
+  const timeStr = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+
+  return (
+    <div className="flex h-screen flex-col bg-[#0f1219]">
+      {/* Header */}
+      <header className="shrink-0 border-b border-white/5 px-4 py-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="h-2 w-2 animate-pulse rounded-full bg-cyan-400" />
+            <span className="bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-lg font-extrabold text-transparent">
+              게임소프트웨어학과
+            </span>
+          </div>
+          <div className="text-right">
+            <div className="text-xs text-slate-500">{dateStr} {weekday}요일</div>
+            <div className="text-xl font-extrabold text-slate-50">{timeStr}</div>
+          </div>
+        </div>
+      </header>
+
+      {/* List */}
+      <div className="flex-1 overflow-y-auto px-4 py-3">
+        <div className="space-y-3">
+          {paginated.map((notice) => (
+            <MobileNoticeCard
+              key={notice.id}
+              notice={notice}
+              now={now}
+              onClick={() => setSelectedId(notice.id)}
+            />
+          ))}
+        </div>
+
+        {/* Page dots */}
+        {totalPages > 1 && (
+          <div className="mt-4 flex justify-center gap-1.5">
+            {Array.from({ length: totalPages }).map((_, i) => (
+              <button
+                key={i}
+                onClick={() => setCurrentPage(i)}
+                className={`rounded-full transition-all ${
+                  i === currentPage
+                    ? "h-1.5 w-6 bg-cyan-400"
+                    : "h-1.5 w-1.5 bg-slate-600"
+                }`}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Detail Modal */}
+      {selected && (
+        <MobileDetailModal
+          notice={selected}
+          now={now}
+          onClose={() => setSelectedId(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+function MobileNoticeCard({
+  notice,
+  now,
+  onClick,
+}: {
+  notice: Notice;
+  now: number;
+  onClick: () => void;
+}) {
+  const cats = parseCategories(notice.category);
+  const style = cats.length > 0 ? CATEGORY_STYLES[cats[0]] : DEFAULT_STYLE;
+  const dbCount = getCheckCount(notice);
+
+  return (
+    <motion.button
+      whileTap={{ scale: 0.98 }}
+      onClick={onClick}
+      className="relative w-full overflow-hidden rounded-xl border border-white/5 bg-[#1a2233] p-4 text-left"
+    >
+      <div
+        className="absolute inset-y-0 left-0 w-1"
+        style={{ background: style.color }}
+      />
+      <div className="pl-3">
+        <div className="flex flex-wrap gap-1.5">
+          {cats.map((c) => {
+            const cs = CATEGORY_STYLES[c];
+            return (
+              <span
+                key={c}
+                className={`rounded-full border px-2 py-0.5 text-xs font-medium ${cs.badge}`}
+              >
+                {cs.label}
+              </span>
+            );
+          })}
+        </div>
+        <h3 className="mt-2 text-base font-bold text-slate-50 line-clamp-1">
+          {notice.title}
+        </h3>
+        {notice.content && (
+          <p className="mt-1 text-sm text-slate-400 line-clamp-2">
+            {notice.content}
+          </p>
+        )}
+        <div className="mt-2 flex items-center justify-between">
+          <span className="text-xs text-slate-500">
+            {formatRelative(notice.createdAt, now)}
+          </span>
+          {dbCount > 0 && (
+            <span className="text-xs text-emerald-400">✓ {dbCount}</span>
+          )}
+        </div>
+      </div>
+    </motion.button>
+  );
+}
+
+function MobileDetailModal({
+  notice,
+  now,
+  onClose,
+}: {
+  notice: Notice;
+  now: number;
+  onClose: () => void;
+}) {
+  const cats = parseCategories(notice.category);
+  const linkDomain = notice.link
+    ? (() => { try { return new URL(notice.link).hostname; } catch { return notice.link; } })()
+    : null;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-end bg-black/60"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ y: "100%" }}
+        animate={{ y: 0 }}
+        exit={{ y: "100%" }}
+        transition={{ type: "spring", damping: 25, stiffness: 300 }}
+        className="h-[85vh] w-full overflow-y-auto rounded-t-2xl bg-[#0f1219] p-5"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Handle bar */}
+        <div className="mx-auto mb-4 h-1 w-12 rounded-full bg-slate-600" />
+
+        {/* Close */}
+        <button
+          onClick={onClose}
+          className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-slate-300"
+        >
+          ✕
+        </button>
+
+        {/* Category */}
+        <div className="flex flex-wrap gap-1.5">
+          {cats.map((c) => {
+            const cs = CATEGORY_STYLES[c];
+            return (
+              <span
+                key={c}
+                className={`rounded-full border px-3 py-1 text-xs font-medium ${cs.badge}`}
+              >
+                {cs.label}
+              </span>
+            );
+          })}
+        </div>
+
+        {/* Title */}
+        <h2 className="mt-4 text-xl font-extrabold text-slate-50">
+          {notice.title}
+        </h2>
+
+        {/* Time */}
+        <p className="mt-2 text-sm text-slate-500">
+          {formatRelative(notice.createdAt, now)}
+        </p>
+
+        {/* Content */}
+        <p className="mt-4 whitespace-pre-line text-base leading-relaxed text-slate-300">
+          {notice.content || "내용이 없습니다."}
+        </p>
+
+        {/* Link */}
+        {notice.link && (
+          <button
+            onClick={() => openExternal(notice.link!)}
+            className="mt-4 flex w-full items-center gap-3 rounded-xl border border-slate-700/60 bg-[#1e293b] p-3"
+          >
+            <span className="text-lg">🔗</span>
+            <div className="min-w-0 flex-1 text-left">
+              <p className="text-sm font-semibold text-slate-300">관련 링크 열기</p>
+              <p className="truncate text-xs text-slate-500">{linkDomain}</p>
+            </div>
+            <span className="text-slate-600">→</span>
+          </button>
+        )}
+
+        {/* Check button */}
+        <div className="mt-6">
+          <CheckButton notice={notice} onInteraction={() => {}} />
+        </div>
+      </motion.div>
+    </motion.div>
   );
 }
