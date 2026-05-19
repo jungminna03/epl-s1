@@ -17,6 +17,7 @@ import {
   getEffectivePeriod,
   parseCategories,
 } from "@/lib/categories";
+import { requestSummary } from "@/lib/ai-summary";
 
 /**
  * /admin
@@ -131,6 +132,10 @@ interface FormState {
   link: string;
   startDate: string; // "YYYY-MM-DD"
   endDate: string;   // "" means 무기한
+  /** edit 모드 진입 시점의 content. 저장 시 비교해서 변경 없으면 요약 재사용. 새 공지는 빈 문자열. */
+  originalContent: string;
+  /** edit 모드 진입 시점의 summary. content 가 그대로면 이 값을 그대로 transact 에 포함. */
+  originalSummary: string | null;
 }
 
 const EMPTY_FORM: FormState = {
@@ -141,6 +146,8 @@ const EMPTY_FORM: FormState = {
   link: "",
   startDate: new Date().toISOString().slice(0, 10),
   endDate: "",
+  originalContent: "",
+  originalSummary: null,
 };
 
 function Dashboard({ onSignOut }: { onSignOut: () => void }) {
@@ -163,6 +170,8 @@ function Dashboard({ onSignOut }: { onSignOut: () => void }) {
       link: n.link ?? "",
       startDate: n.startDate ? msToDate(n.startDate) : msToDate(n.createdAt),
       endDate: n.endDate ? msToDate(n.endDate) : "",
+      originalContent: n.content,
+      originalSummary: (n as Notice & { summary?: string | null }).summary ?? null,
     });
   }
 
@@ -172,32 +181,46 @@ function Dashboard({ onSignOut }: { onSignOut: () => void }) {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.title.trim() || !form.content.trim()) {
+    const trimmedTitle = form.title.trim();
+    const trimmedContent = form.content.trim();
+    if (!trimmedTitle || !trimmedContent) {
       return;
     }
     setSubmitting(true);
     try {
+      // 본문이 그대로면 기존 summary 재사용 — 토큰 낭비 방지.
+      const contentUnchanged =
+        editing && trimmedContent === form.originalContent.trim();
+      let summary: string | null;
+      if (contentUnchanged) {
+        summary = form.originalSummary;
+      } else {
+        summary = await requestSummary(trimmedTitle, trimmedContent);
+      }
+
       if (editing && form.id) {
         await db.transact(
           db.tx.notices[form.id].update({
-            title: form.title.trim(),
-            content: form.content.trim(),
+            title: trimmedTitle,
+            content: trimmedContent,
             category: form.category || "",
             link: form.link.trim() || null,
             startDate: dateToMs(form.startDate),
             endDate: form.endDate ? dateToMs(form.endDate) : null,
+            summary: summary,
           }),
         );
       } else {
         await db.transact(
           db.tx.notices[id()].update({
-            title: form.title.trim(),
-            content: form.content.trim(),
+            title: trimmedTitle,
+            content: trimmedContent,
             category: form.category || "",
             link: form.link.trim() || null,
             createdAt: Date.now(),
             startDate: dateToMs(form.startDate),
             endDate: form.endDate ? dateToMs(form.endDate) : null,
+            summary: summary,
           }),
         );
       }
