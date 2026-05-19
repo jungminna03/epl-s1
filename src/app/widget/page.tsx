@@ -15,7 +15,13 @@ import {
   useMotionValue,
 } from "framer-motion";
 import { db, type Notice } from "@/lib/instant";
-import { getEffectivePeriod, isNoticeVisible } from "@/lib/categories";
+import {
+  CATEGORY_STYLES,
+  DEFAULT_STYLE,
+  getEffectivePeriod,
+  isNoticeVisible,
+  parseCategories,
+} from "@/lib/categories";
 import { fireCheckEffect } from "@/lib/check-effects";
 import {
   loadReadState,
@@ -791,6 +797,7 @@ function NoticeDetailOverlay({
         >
           {dateLabel}
         </p>
+        <SummaryBox notice={notice} />
         <div
           className="flex-1 overflow-y-auto whitespace-pre-wrap text-white"
           style={{
@@ -846,6 +853,33 @@ function NoticeDetailOverlay({
         </button>
       </motion.div>
     </motion.div>
+  );
+}
+
+/* ─── Summary Box ───────────────────────────────────── */
+
+function SummaryBox({ notice }: { notice: Notice }) {
+  const summary = (notice as Notice & { summary?: string | null }).summary;
+  if (!summary || summary.trim().length === 0) return null;
+
+  const cats = parseCategories(notice.category);
+  const style = cats.length > 0 ? CATEGORY_STYLES[cats[0]] : DEFAULT_STYLE;
+
+  return (
+    <div
+      className="text-slate-100"
+      style={{
+        background: "rgba(255,255,255,0.05)",
+        borderLeft: `0.5vh solid ${style.color}`,
+        borderRadius: "1vh",
+        padding: "1.6vh 2vh",
+        marginBottom: "1.6vh",
+        fontSize: "2.8vh",
+        lineHeight: 1.5,
+      }}
+    >
+      {summary}
+    </div>
   );
 }
 
