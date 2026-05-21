@@ -134,12 +134,19 @@ export function parseCategories(raw: string): Category[] {
     );
 }
 
+const DEFAULT_DURATION_MS = 7 * 24 * 60 * 60 * 1000; // 7일
+
 export function isNoticeVisible(
   notice: { createdAt: number; startDate?: number; endDate?: number },
   now: number = Date.now(),
 ): boolean {
   const start = notice.startDate ?? notice.createdAt;
   if (now < start) return false;
-  if (notice.endDate == null) return true;
-  return now <= notice.endDate;
+  const effectiveEnd = notice.endDate ?? (notice.createdAt + DEFAULT_DURATION_MS);
+  return now <= effectiveEnd;
+}
+
+/** endDate가 없으면 기본 7일 후를 계산 */
+export function getEndDate(notice: { createdAt: number; endDate?: number }): number {
+  return notice.endDate ?? (notice.createdAt + DEFAULT_DURATION_MS);
 }

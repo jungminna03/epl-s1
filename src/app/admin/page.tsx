@@ -9,7 +9,7 @@ import {
   type Category,
   type Notice,
 } from "@/lib/instant";
-import { CATEGORY_STYLES, DEFAULT_STYLE, formatAbsolute, parseCategories } from "@/lib/categories";
+import { CATEGORY_STYLES, DEFAULT_STYLE, formatAbsolute, getEndDate, parseCategories } from "@/lib/categories";
 
 /**
  * /admin
@@ -143,6 +143,19 @@ function Dashboard({ onSignOut }: { onSignOut: () => void }) {
 
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [submitting, setSubmitting] = useState(false);
+  const [mobileView, setMobileView] = useState<"list" | "form">("list");
+  const [layoutMode, setLayoutMode] = useState<"desktop" | "touch">(
+    typeof window !== "undefined" ? (window.innerWidth >= 1280 ? "desktop" : "touch") : "touch"
+  );
+
+  useEffect(() => {
+    function handleResize() {
+      setLayoutMode(window.innerWidth >= 1280 ? "desktop" : "touch");
+    }
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   const editing = form.id !== null;
   const notices: Notice[] = useMemo(() => data?.notices ?? [], [data]);
@@ -157,6 +170,7 @@ function Dashboard({ onSignOut }: { onSignOut: () => void }) {
       startDate: n.startDate ? msToDate(n.startDate) : msToDate(n.createdAt),
       endDate: n.endDate ? msToDate(n.endDate) : "",
     });
+    setMobileView("form");
   }
 
   function reset() {
@@ -195,6 +209,7 @@ function Dashboard({ onSignOut }: { onSignOut: () => void }) {
         );
       }
       reset();
+      setMobileView("list");
     } finally {
       setSubmitting(false);
     }
@@ -213,9 +228,9 @@ function Dashboard({ onSignOut }: { onSignOut: () => void }) {
   }
 
   return (
-    <main className="min-h-screen">
+    <main className="min-h-screen overflow-x-hidden">
       <header className="border-b border-white/5 bg-zinc-950/80 backdrop-blur">
-        <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-5">
+        <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-4 lg:px-6 lg:py-5">
           <div>
             <p className="text-xs uppercase tracking-[0.3em] text-zinc-500">
               Admin Dashboard
@@ -243,153 +258,84 @@ function Dashboard({ onSignOut }: { onSignOut: () => void }) {
         </div>
       </header>
 
-      <div className="mx-auto grid w-full max-w-6xl gap-6 px-6 py-8 lg:grid-cols-[1fr_400px]">
-        {/* List */}
-        <section>
-          <SectionHeader
-            title="등록된 공지"
-            subtitle={`총 ${notices.length}건`}
-          />
-          {isLoading ? (
-            <p className="mt-4 text-sm text-zinc-500">불러오는 중…</p>
-          ) : error ? (
-            <p className="mt-4 text-sm text-red-400">{error.message}</p>
-          ) : notices.length === 0 ? (
-            <EmptyList />
-          ) : (
-            <ul className="mt-4 space-y-3">
-              <AnimatePresence initial={false}>
-                {notices.map((n) => (
-                  <NoticeRow
-                    key={n.id}
-                    notice={n}
-                    active={form.id === n.id}
-                    onEdit={() => startEdit(n)}
-                    onDelete={() => handleDelete(n)}
-                  />
-                ))}
-              </AnimatePresence>
-            </ul>
-          )}
-        </section>
-
-        {/* Form */}
-        <aside className="lg:sticky lg:top-6 lg:self-start">
-          <div className="rounded-2xl border border-white/5 bg-zinc-900/60 p-6 backdrop-blur">
+      {/* ── Desktop (mouse + fine pointer) ── */}
+      {(layoutMode === "desktop" || layoutMode === null) && (
+        <div className="mx-auto w-full max-w-6xl grid-cols-[1fr_400px] gap-6 px-6 py-8 lg:grid">
+          {/* List */}
+          <section>
             <SectionHeader
-              title={editing ? "공지 수정" : "새 공지 작성"}
-              subtitle={editing ? "선택된 공지를 수정합니다" : undefined}
-              right={
-                editing ? (
-                  <button
-                    onClick={reset}
-                    type="button"
-                    className="text-xs text-zinc-400 hover:text-zinc-200"
-                  >
-                    + 새 공지로 전환
-                  </button>
-                ) : null
-              }
+              title="등록된 공지"
+              subtitle={`총 ${notices.length}건`}
             />
-            <form onSubmit={handleSubmit} className="mt-5 space-y-4">
-              <Field label="카테고리">
-                <CategoryPicker
-                  value={form.category}
-                  onChange={(c) => setForm((f) => ({ ...f, category: c }))}
-                />
-              </Field>
+            {isLoading ? (
+              <p className="mt-4 text-sm text-zinc-500">불러오는 중…</p>
+            ) : error ? (
+              <p className="mt-4 text-sm text-red-400">{error.message}</p>
+            ) : notices.length === 0 ? (
+              <EmptyList />
+            ) : (
+              <ul className="mt-4 space-y-3">
+                <AnimatePresence initial={false}>
+                  {notices.map((n) => (
+                    <NoticeRow
+                      key={n.id}
+                      notice={n}
+                      active={form.id === n.id}
+                      onEdit={() => startEdit(n)}
+                      onDelete={() => handleDelete(n)}
+                    />
+                  ))}
+                </AnimatePresence>
+              </ul>
+            )}
+          </section>
 
-              <Field label="제목">
-                <input
-                  type="text"
-                  value={form.title}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, title: e.target.value }))
-                  }
-                  placeholder="예: 5/13 데이터구조 휴강 안내"
-                  className="w-full rounded-xl border border-white/10 bg-zinc-950 px-3 py-2.5 text-sm text-zinc-100 outline-none transition focus:border-zinc-500"
-                />
-              </Field>
+          {/* Form */}
+          <aside className="sticky top-6 self-start">
+            <div className="rounded-2xl border border-white/5 bg-zinc-900/60 p-6 backdrop-blur">
+              <SectionHeader
+                title={editing ? "공지 수정" : "새 공지 작성"}
+                subtitle={editing ? "선택된 공지를 수정합니다" : undefined}
+              />
+              <NoticeForm
+                form={form}
+                setForm={setForm}
+                editing={editing}
+                submitting={submitting}
+                onSubmit={handleSubmit}
+                onReset={reset}
+                onBack={editing ? () => { reset(); setMobileView("list"); } : undefined}
+              />
+            </div>
+          </aside>
+        </div>
+      )}
 
-              <Field label="내용">
-                <textarea
-                  value={form.content}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, content: e.target.value }))
-                  }
-                  rows={6}
-                  placeholder="공지 내용을 입력하세요."
-                  className="w-full resize-y rounded-xl border border-white/10 bg-zinc-950 px-3 py-2.5 text-sm leading-relaxed text-zinc-100 outline-none transition focus:border-zinc-500"
-                />
-              </Field>
-
-              <Field label="링크 (선택)">
-                <input
-                  type="url"
-                  value={form.link}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, link: e.target.value }))
-                  }
-                  placeholder="https://example.com"
-                  className="w-full rounded-xl border border-white/10 bg-zinc-950 px-3 py-2.5 text-sm text-zinc-100 outline-none transition focus:border-zinc-500"
-                />
-              </Field>
-
-              <Field label="게시 기간">
-                <div className="flex items-center gap-2">
-                  <input
-                    type="date"
-                    value={form.startDate}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, startDate: e.target.value }))
-                    }
-                    onClick={(e) => (e.target as HTMLInputElement).showPicker()}
-                    className="flex-1 cursor-pointer rounded-xl border border-white/10 bg-zinc-950 px-3 py-2.5 text-sm text-zinc-100 outline-none transition hover:border-white/30 focus:border-zinc-500 [&::-webkit-calendar-picker-indicator]:hidden"
-                  />
-                  <span className="text-xs text-zinc-500">~</span>
-                  <input
-                    type="date"
-                    value={form.endDate}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, endDate: e.target.value }))
-                    }
-                    onClick={(e) => (e.target as HTMLInputElement).showPicker()}
-                    className="flex-1 cursor-pointer rounded-xl border border-white/10 bg-zinc-950 px-3 py-2.5 text-sm text-zinc-100 outline-none transition hover:border-white/30 focus:border-zinc-500 [&::-webkit-calendar-picker-indicator]:hidden"
-                  />
-                </div>
-                {!form.endDate && (
-                  <p className="mt-1 text-[11px] text-zinc-500">
-                    종료일을 비우면 무기한 게시됩니다.
-                  </p>
-                )}
-              </Field>
-
-              <div className="flex items-center gap-2 pt-2">
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="flex-1 rounded-xl bg-zinc-100 px-4 py-2.5 text-sm font-medium text-zinc-900 transition hover:bg-white disabled:opacity-60"
-                >
-                  {submitting
-                    ? "저장 중…"
-                    : editing
-                      ? "변경사항 저장"
-                      : "공지 등록"}
-                </button>
-                {editing ? (
-                  <button
-                    type="button"
-                    onClick={reset}
-                    className="rounded-xl border border-white/10 px-4 py-2.5 text-sm text-zinc-300 hover:border-white/30"
-                  >
-                    취소
-                  </button>
-                ) : null}
-              </div>
-            </form>
-          </div>
-        </aside>
-      </div>
+      {/* ── Touch (mobile + tablet) ── */}
+      {layoutMode === "touch" && (
+        <div>
+          {mobileView === "list" ? (
+            <MobileListView
+              notices={notices}
+              isLoading={isLoading}
+              error={error}
+              onEdit={startEdit}
+              onDelete={handleDelete}
+              onCreate={() => { reset(); setMobileView("form"); }}
+            />
+          ) : (
+            <MobileFormView
+              form={form}
+              setForm={setForm}
+              editing={editing}
+              submitting={submitting}
+              onSubmit={handleSubmit}
+              onReset={reset}
+              onBack={() => { reset(); setMobileView("list"); }}
+            />
+          )}
+        </div>
+      )}
     </main>
   );
 }
@@ -452,7 +398,7 @@ function CategoryPicker({
   }
 
   return (
-    <div className="grid grid-cols-4 gap-2">
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
       {CATEGORIES.map((c) => {
         const s = CATEGORY_STYLES[c];
         const active = selected.includes(c);
@@ -506,7 +452,7 @@ function NoticeRow({
       <div className={`absolute inset-y-0 left-0 w-1 ${s.dot}`} />
       <div className="flex items-start justify-between gap-3 pl-2">
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {cats.map((c) => {
               const cs = CATEGORY_STYLES[c];
               return (
@@ -523,7 +469,7 @@ function NoticeRow({
               {" · "}
               {notice.startDate ? msToDate(notice.startDate) : msToDate(notice.createdAt)}
               {" ~ "}
-              {notice.endDate ? msToDate(notice.endDate) : "무기한"}
+              {msToDate(getEndDate(notice))}
             </span>
           </div>
           <h3 className="mt-1.5 truncate text-sm font-semibold text-zinc-100">
@@ -539,16 +485,16 @@ function NoticeRow({
             </p>
           )}
         </div>
-        <div className="flex shrink-0 flex-col gap-1.5">
+        <div className="flex shrink-0 flex-row gap-1.5 lg:flex-col">
           <button
             onClick={onEdit}
-            className="rounded-md border border-white/10 px-2.5 py-1 text-[11px] text-zinc-300 hover:border-white/30 hover:text-white"
+            className="rounded-md border border-white/10 px-3 py-2 text-xs text-zinc-300 hover:border-white/30 hover:text-white lg:px-2.5 lg:py-1 lg:text-[11px]"
           >
             수정
           </button>
           <button
             onClick={onDelete}
-            className="rounded-md border border-white/10 px-2.5 py-1 text-[11px] text-zinc-400 hover:border-red-500/60 hover:text-red-300"
+            className="rounded-md border border-white/10 px-3 py-2 text-xs text-zinc-400 hover:border-red-500/60 hover:text-red-300 lg:px-2.5 lg:py-1 lg:text-[11px]"
           >
             삭제
           </button>
@@ -562,9 +508,230 @@ function EmptyList() {
   return (
     <div className="mt-4 rounded-2xl border border-dashed border-white/10 px-6 py-12 text-center">
       <p className="text-sm text-zinc-300">아직 등록된 공지가 없습니다.</p>
-      <p className="mt-1 text-xs text-zinc-500">
-        오른쪽 폼에서 첫 공지를 작성해 보세요.
-      </p>
     </div>
+  );
+}
+
+/* ─── Reusable Form Component ─── */
+
+function NoticeForm({
+  form,
+  setForm,
+  editing,
+  submitting,
+  onSubmit,
+  onReset,
+  onBack,
+}: {
+  form: FormState;
+  setForm: React.Dispatch<React.SetStateAction<FormState>>;
+  editing: boolean;
+  submitting: boolean;
+  onSubmit: (e: React.FormEvent) => void;
+  onReset: () => void;
+  onBack?: () => void;
+}) {
+  return (
+    <form onSubmit={onSubmit} className="mt-5 space-y-4">
+      <Field label="카테고리">
+        <CategoryPicker
+          value={form.category}
+          onChange={(c) => setForm((f) => ({ ...f, category: c }))}
+        />
+      </Field>
+
+      <Field label="제목">
+        <input
+          type="text"
+          value={form.title}
+          onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+          placeholder="예: 5/13 데이터구조 휴강 안내"
+          className="w-full rounded-xl border border-white/10 bg-zinc-950 px-3 py-2.5 text-sm text-zinc-100 outline-none transition focus:border-zinc-500"
+        />
+      </Field>
+
+      <Field label="내용">
+        <textarea
+          value={form.content}
+          onChange={(e) => setForm((f) => ({ ...f, content: e.target.value }))}
+          rows={6}
+          placeholder="공지 내용을 입력하세요."
+          className="w-full resize-y rounded-xl border border-white/10 bg-zinc-950 px-3 py-2.5 text-sm leading-relaxed text-zinc-100 outline-none transition focus:border-zinc-500"
+        />
+      </Field>
+
+      <Field label="링크 (선택)">
+        <input
+          type="url"
+          value={form.link}
+          onChange={(e) => setForm((f) => ({ ...f, link: e.target.value }))}
+          placeholder="https://example.com"
+          className="w-full rounded-xl border border-white/10 bg-zinc-950 px-3 py-2.5 text-sm text-zinc-100 outline-none transition focus:border-zinc-500"
+        />
+      </Field>
+
+      <Field label="게시 기간">
+        <div className="flex items-center gap-2">
+          <input
+            type="date"
+            value={form.startDate}
+            onChange={(e) => setForm((f) => ({ ...f, startDate: e.target.value }))}
+            onClick={(e) => (e.target as HTMLInputElement).showPicker()}
+            className="flex-1 cursor-pointer rounded-xl border border-white/10 bg-zinc-950 px-3 py-2.5 text-sm text-zinc-100 outline-none transition hover:border-white/30 focus:border-zinc-500 [&::-webkit-calendar-picker-indicator]:hidden"
+          />
+          <span className="text-xs text-zinc-500">~</span>
+          <input
+            type="date"
+            value={form.endDate}
+            onChange={(e) => setForm((f) => ({ ...f, endDate: e.target.value }))}
+            onClick={(e) => (e.target as HTMLInputElement).showPicker()}
+            className="flex-1 cursor-pointer rounded-xl border border-white/10 bg-zinc-950 px-3 py-2.5 text-sm text-zinc-100 outline-none transition hover:border-white/30 focus:border-zinc-500 [&::-webkit-calendar-picker-indicator]:hidden"
+          />
+        </div>
+        {!form.endDate && (
+          <p className="mt-1 text-[11px] text-zinc-500">
+            종료일을 비우면 시작일부터 7일간 게시됩니다.
+          </p>
+        )}
+      </Field>
+
+      <div className="flex items-center gap-2 pt-2">
+        <button
+          type="submit"
+          disabled={submitting}
+          className="flex-1 rounded-xl bg-zinc-100 px-4 py-2.5 text-sm font-medium text-zinc-900 transition hover:bg-white disabled:opacity-60"
+        >
+          {submitting
+            ? "저장 중…"
+            : editing
+              ? "변경사항 저장"
+              : "공지 등록"}
+        </button>
+        {editing ? (
+          <button
+            type="button"
+            onClick={onBack || onReset}
+            className="rounded-xl border border-white/10 px-4 py-2.5 text-sm text-zinc-300 hover:border-white/30"
+          >
+            {onBack ? "취소" : "새 공지로 전환"}
+          </button>
+        ) : null}
+      </div>
+    </form>
+  );
+}
+
+/* ─── Mobile List View ─── */
+
+function MobileListView({
+  notices,
+  isLoading,
+  error,
+  onEdit,
+  onDelete,
+  onCreate,
+}: {
+  notices: Notice[];
+  isLoading: boolean;
+  error: { message: string } | null | undefined;
+  onEdit: (n: Notice) => void;
+  onDelete: (n: Notice) => void;
+  onCreate: () => void;
+}) {
+  return (
+    <div className="relative min-h-screen px-4 py-4">
+      <SectionHeader
+        title="등록된 공지"
+        subtitle={`총 ${notices.length}건`}
+      />
+      {isLoading ? (
+        <p className="mt-4 text-sm text-zinc-500">불러오는 중…</p>
+      ) : error ? (
+        <p className="mt-4 text-sm text-red-400">{error.message}</p>
+      ) : notices.length === 0 ? (
+        <EmptyList />
+      ) : (
+        <ul className="mt-4 space-y-3 pb-24">
+          <AnimatePresence initial={false}>
+            {notices.map((n) => (
+              <NoticeRow
+                key={n.id}
+                notice={n}
+                active={false}
+                onEdit={() => onEdit(n)}
+                onDelete={() => onDelete(n)}
+              />
+            ))}
+          </AnimatePresence>
+        </ul>
+      )}
+
+      {/* FAB */}
+      <button
+        onClick={onCreate}
+        className="fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-cyan-400 to-blue-500 text-white shadow-lg shadow-cyan-500/30 transition active:scale-95"
+      >
+        <span className="text-2xl font-bold">+</span>
+      </button>
+    </div>
+  );
+}
+
+/* ─── Mobile Form View ─── */
+
+function MobileFormView({
+  form,
+  setForm,
+  editing,
+  submitting,
+  onSubmit,
+  onReset,
+  onBack,
+}: {
+  form: FormState;
+  setForm: React.Dispatch<React.SetStateAction<FormState>>;
+  editing: boolean;
+  submitting: boolean;
+  onSubmit: (e: React.FormEvent) => void;
+  onReset: () => void;
+  onBack: () => void;
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, x: 20 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: 20 }}
+      transition={{ type: "spring", stiffness: 300, damping: 30 }}
+      className="min-h-screen bg-[#0f1219]"
+    >
+      <header className="sticky top-0 z-10 border-b border-white/5 bg-zinc-950/80 px-4 py-3 backdrop-blur">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={onBack}
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 transition hover:bg-white/10 hover:text-white"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <path d="M15 18l-6-6 6-6" />
+            </svg>
+          </button>
+          <h1 className="text-lg font-semibold text-zinc-100">
+            {editing ? "공지 수정" : "새 공지 작성"}
+          </h1>
+        </div>
+      </header>
+
+      <div className="px-4 py-4">
+        <div className="rounded-2xl border border-white/5 bg-zinc-900/60 p-4 backdrop-blur">
+          <NoticeForm
+            form={form}
+            setForm={setForm}
+            editing={editing}
+            submitting={submitting}
+            onSubmit={onSubmit}
+            onReset={onReset}
+          />
+        </div>
+      </div>
+    </motion.div>
   );
 }
