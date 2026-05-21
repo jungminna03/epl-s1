@@ -12,8 +12,8 @@ export const APP_CONFIG = {
     : "https://epl-s1.vercel.app/widget",
 
   /** 자동 업데이트 매니페스트 호스트 (electron-updater generic provider).
-   *  Vercel Blob Storage — 인스톨러가 100MB를 넘어 정적 호스팅 불가, Blob 사용. */
-  updateFeedUrl: "https://m3vzlavafd1gvxn2.public.blob.vercel-storage.com",
+   *  GitHub Releases — public repo asset 은 인증 X, 다운로드 무제한 무료. */
+  updateFeedUrl: "https://github.com/jungminna03/epl-s1/releases/latest/download",
 
   /** 자동 업데이트 폴링 주기 (ms). */
   updateIntervalMs: 30 * 60 * 1000,
@@ -51,7 +51,7 @@ export const APP_CONFIG = {
     showInTaskbar: isDev,
   },
 
-  /** 부트스트랩 URL */
+  /** 부트스트랩 URL — main 브랜치 raw 파일. 캐시 5분, 폴링 30분과 잘 맞음. */
   bootstrapUrl:
-    "https://m3vzlavafd1gvxn2.public.blob.vercel-storage.com/widget-config.json",
+    "https://raw.githubusercontent.com/jungminna03/epl-s1/main/widget-config.json",
 } as const;

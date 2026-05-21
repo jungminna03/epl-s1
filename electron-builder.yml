@@ -27,7 +27,10 @@ win:
       arch:
         - x64
   icon: electron-resources/icon.ico
-  artifactName: EPL-공지사항-Setup-${version}.${ext}
+  # ASCII 파일명 — GitHub Actions Windows runner 의 gh release upload 가
+  # 한글 파일명을 점(.)으로 mangling 하는 인코딩 이슈 회피.
+  # 설치 시 UI 표시명(productName: "EPL 공지사항") 은 그대로 유지.
+  artifactName: EPL-Notice-Setup-${version}.${ext}
   forceCodeSigning: false
   verifyUpdateCodeSignature: false
 
@@ -41,9 +44,9 @@ nsis:
   installerIcon: electron-resources/icon.ico
   uninstallerIcon: electron-resources/icon.ico
 
-# 자동 업데이트 — Vercel Blob Storage 를 generic provider 로 사용.
-# (Vercel 정적 파일은 100MB 제한이 있어 156MB 인스톨러를 못 받음 → Blob 사용)
+# 자동 업데이트 — GitHub Releases (public repo, 무료, 무제한 다운로드).
+# generic provider 유지 — releases/latest/download URL 이 정적 파일 서버 패턴 그대로 동작.
 publish:
   - provider: generic
-    url: https://m3vzlavafd1gvxn2.public.blob.vercel-storage.com
+    url: https://github.com/jungminna03/epl-s1/releases/latest/download
     channel: latest

@@ -24,6 +24,7 @@ contextBridge.exposeInMainWorld("epl", {
   setBounds: (b: Partial<Bounds>) => ipcRenderer.send("widget:set-bounds", b),
   setAlwaysOnTop: (value: boolean) =>
     ipcRenderer.send("widget:set-always-on-top", value),
+  sendToBack: () => ipcRenderer.send("widget:send-to-back"),
   setOpacity: (value: number) => ipcRenderer.send("widget:set-opacity", value),
   setIgnoreMouseEvents: (value: boolean, opts?: { forward?: boolean }) =>
     ipcRenderer.send("widget:set-ignore-mouse", { value, forward: opts?.forward }),
@@ -106,6 +107,7 @@ declare global {
       // 창 조작
       setBounds: (b: Partial<Bounds>) => void;
       setAlwaysOnTop: (value: boolean) => void;
+      sendToBack: () => void;
       setOpacity: (value: number) => void;
       setIgnoreMouseEvents: (value: boolean, opts?: { forward?: boolean }) => void;
       setZoomFactor: (factor: number) => void;
