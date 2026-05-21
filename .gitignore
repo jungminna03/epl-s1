@@ -68,3 +68,7 @@ AGENTS.md
 
 # Vercel env pull 임시 파일 (BLOB_READ_WRITE_TOKEN 포함)
 .env.vercel.tmp
+
+# IDE
+.idea/
+.vscode/
