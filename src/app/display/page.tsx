@@ -690,6 +690,9 @@ function ExpandedTile({
           {notice.title}
         </h2>
 
+        {/* AI Summary */}
+        <SummaryBox notice={notice} />
+
         {/* Body */}
         <p
           className="whitespace-pre-line text-slate-400 leading-[1.7]"
@@ -866,6 +869,45 @@ function PageIndicator({ total, current }: { total: number; current: number }) {
           }}
         />
       ))}
+    </div>
+  );
+}
+
+/* ─── AI Summary Box (expanded view 전용) ───────────── */
+
+function SummaryBox({ notice }: { notice: Notice }) {
+  const summary = (notice as Notice & { summary?: string | null }).summary;
+  if (!summary || summary.trim().length === 0) return null;
+
+  const cats = parseCategories(notice.category);
+  const style = cats.length > 0 ? CATEGORY_STYLES[cats[0]] : DEFAULT_STYLE;
+
+  return (
+    <div style={{ marginTop: "1.5vh", textAlign: "left" }}>
+      <p
+        className="font-semibold"
+        style={{
+          color: style.color,
+          fontSize: "1vh",
+          marginBottom: "0.5vh",
+          letterSpacing: "0.05vh",
+        }}
+      >
+        AI 요약
+      </p>
+      <div
+        className="text-slate-100"
+        style={{
+          background: "rgba(255,255,255,0.05)",
+          borderLeft: `0.4vh solid ${style.color}`,
+          borderRadius: "0.8vh",
+          padding: "1.2vh 1.5vh",
+          fontSize: "1.5vh",
+          lineHeight: 1.55,
+        }}
+      >
+        {summary}
+      </div>
     </div>
   );
 }

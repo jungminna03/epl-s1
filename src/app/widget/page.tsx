@@ -866,19 +866,31 @@ function SummaryBox({ notice }: { notice: Notice }) {
   const style = cats.length > 0 ? CATEGORY_STYLES[cats[0]] : DEFAULT_STYLE;
 
   return (
-    <div
-      className="text-slate-100"
-      style={{
-        background: "rgba(255,255,255,0.05)",
-        borderLeft: `0.5vh solid ${style.color}`,
-        borderRadius: "1vh",
-        padding: "1.6vh 2vh",
-        marginBottom: "1.6vh",
-        fontSize: "2.8vh",
-        lineHeight: 1.5,
-      }}
-    >
-      {summary}
+    <div style={{ marginBottom: "1.6vh" }}>
+      <p
+        className="font-semibold"
+        style={{
+          color: style.color,
+          fontSize: "1.6vh",
+          marginBottom: "0.6vh",
+          letterSpacing: "0.05vh",
+        }}
+      >
+        AI 요약
+      </p>
+      <div
+        className="text-slate-100"
+        style={{
+          background: "rgba(255,255,255,0.05)",
+          borderLeft: `0.5vh solid ${style.color}`,
+          borderRadius: "1vh",
+          padding: "1.6vh 2vh",
+          fontSize: "2.8vh",
+          lineHeight: 1.5,
+        }}
+      >
+        {summary}
+      </div>
     </div>
   );
 }
