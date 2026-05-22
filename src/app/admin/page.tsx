@@ -255,6 +255,7 @@ function Dashboard({ onSignOut }: { onSignOut: () => void }) {
             </h1>
           </div>
           <div className="flex items-center gap-2">
+            <BackfillSummariesButton notices={notices} />
             <a
               href="/display"
               target="_blank"
@@ -604,5 +605,62 @@ function EmptyList() {
         오른쪽 폼에서 첫 공지를 작성해 보세요.
       </p>
     </div>
+  );
+}
+
+/**
+ * 기존 공지(summary 없는 것) 에 대해 AI 요약을 일괄 생성하는 일회성 버튼.
+ * - summary 가 비어있는 공지가 한 건도 없으면 자체적으로 렌더하지 않는다.
+ * - 순차 처리(Ollama Cloud rate limit 회피 + 진행률 표시 용이).
+ */
+function BackfillSummariesButton({ notices }: { notices: Notice[] }) {
+  const pending = useMemo(
+    () =>
+      notices.filter((n) => {
+        const s = (n as Notice & { summary?: string | null }).summary;
+        return !s || s.trim().length === 0;
+      }),
+    [notices],
+  );
+
+  const [running, setRunning] = useState(false);
+  const [progress, setProgress] = useState({ done: 0, failed: 0 });
+
+  if (!running && pending.length === 0) return null;
+
+  async function handleClick() {
+    setRunning(true);
+    setProgress({ done: 0, failed: 0 });
+    for (const n of pending) {
+      const summary = await requestSummary(n.title, n.content);
+      try {
+        await db.transact(db.tx.notices[n.id].update({ summary }));
+        setProgress((p) => ({ ...p, done: p.done + 1 }));
+      } catch {
+        setProgress((p) => ({ ...p, failed: p.failed + 1 }));
+      }
+    }
+    setRunning(false);
+  }
+
+  const processed = progress.done + progress.failed;
+  const label = running
+    ? `백필 중 ${processed}/${pending.length}…`
+    : `기존 공지 요약 백필 (${pending.length}건)`;
+
+  return (
+    <button
+      type="button"
+      onClick={handleClick}
+      disabled={running}
+      className="rounded-full border border-cyan-700/40 bg-cyan-500/10 px-4 py-2 text-xs font-medium text-cyan-300 transition hover:border-cyan-500/80 hover:text-cyan-200 disabled:opacity-60"
+      title={
+        running
+          ? `처리 중: ${progress.done}건 성공, ${progress.failed}건 실패`
+          : "summary 없는 공지에 대해 AI 요약을 일괄 생성"
+      }
+    >
+      {label}
+    </button>
   );
 }
