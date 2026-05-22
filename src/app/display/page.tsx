@@ -884,17 +884,34 @@ function SummaryBox({ notice }: { notice: Notice }) {
 
   return (
     <div style={{ marginTop: "1.5vh", textAlign: "left" }}>
-      <p
+      <div
         className="font-semibold"
         style={{
           color: style.color,
-          fontSize: "1vh",
-          marginBottom: "0.5vh",
+          fontSize: "1.8vh",
+          marginBottom: "0.7vh",
           letterSpacing: "0.05vh",
+          display: "flex",
+          alignItems: "center",
+          gap: "0.6vh",
         }}
       >
-        AI 요약
-      </p>
+        <svg
+          width="2vh"
+          height="2vh"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke={style.color}
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M12 3l1.9 4.6L18.5 9.5l-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9L12 3z" />
+          <path d="M19 14l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8.8-2z" />
+        </svg>
+        <span>AI 요약</span>
+      </div>
       <div
         className="text-slate-100"
         style={{
