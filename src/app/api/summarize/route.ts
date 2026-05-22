@@ -51,7 +51,7 @@ export async function POST(req: Request) {
       ? rawContent.slice(0, MAX_CONTENT_LENGTH)
       : rawContent;
 
-  const model = process.env.OLLAMA_MODEL || "qwen3.5:9b";
+  const model = process.env.OLLAMA_MODEL || "gpt-oss:120b";
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), OLLAMA_TIMEOUT_MS);
 
@@ -74,6 +74,11 @@ export async function POST(req: Request) {
     });
 
     if (!upstream.ok) {
+      const errText = await upstream.text().catch(() => "<unreadable>");
+      console.error(
+        `[summarize] Ollama ${upstream.status} (model=${model}):`,
+        errText.slice(0, 500),
+      );
       return NextResponse.json({ error: "upstream" }, { status: 502 });
     }
 
@@ -82,6 +87,10 @@ export async function POST(req: Request) {
     };
     const text = data?.message?.content;
     if (typeof text !== "string" || text.trim().length === 0) {
+      console.error(
+        `[summarize] Ollama OK but no content (model=${model}):`,
+        JSON.stringify(data).slice(0, 500),
+      );
       return NextResponse.json({ error: "upstream" }, { status: 502 });
     }
 
@@ -90,6 +99,7 @@ export async function POST(req: Request) {
     if (err instanceof Error && err.name === "AbortError") {
       return NextResponse.json({ error: "timeout" }, { status: 504 });
     }
+    console.error(`[summarize] fetch error (model=${model}):`, err);
     return NextResponse.json({ error: "upstream" }, { status: 502 });
   } finally {
     clearTimeout(timeoutId);
