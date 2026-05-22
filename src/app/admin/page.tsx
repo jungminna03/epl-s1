@@ -17,7 +17,7 @@ import {
   getEffectivePeriod,
   parseCategories,
 } from "@/lib/categories";
-import { requestSummary } from "@/lib/ai-summary";
+import { MIN_CONTENT_LENGTH, requestSummary } from "@/lib/ai-summary";
 
 /**
  * /admin
@@ -618,7 +618,10 @@ function BackfillSummariesButton({ notices }: { notices: Notice[] }) {
     () =>
       notices.filter((n) => {
         const s = (n as Notice & { summary?: string | null }).summary;
-        return !s || s.trim().length === 0;
+        const hasSummary = !!s && s.trim().length > 0;
+        // 본문이 MIN_CONTENT_LENGTH 미만이면 API 가 어차피 null 반환하므로 카운트에서 제외.
+        const tooShort = n.content.trim().length < MIN_CONTENT_LENGTH;
+        return !hasSummary && !tooShort;
       }),
     [notices],
   );
