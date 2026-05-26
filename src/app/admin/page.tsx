@@ -17,7 +17,11 @@ import {
   getEffectivePeriod,
   parseCategories,
 } from "@/lib/categories";
-import { MIN_CONTENT_LENGTH, requestSummary } from "@/lib/ai-summary";
+import {
+  MIN_CONTENT_LENGTH,
+  SUMMARY_HARD_CAP,
+  requestSummary,
+} from "@/lib/ai-summary";
 
 /**
  * /admin
@@ -609,8 +613,9 @@ function EmptyList() {
 }
 
 /**
- * 기존 공지(summary 없는 것) 에 대해 AI 요약을 일괄 생성하는 일회성 버튼.
- * - summary 가 비어있는 공지가 한 건도 없으면 자체적으로 렌더하지 않는다.
+ * 기존 공지에 대해 AI 요약을 일괄 생성/재생성하는 버튼.
+ * 대상: summary 가 비어있거나, 길이 정책(SUMMARY_HARD_CAP) 을 초과해 너무 긴 요약.
+ * - 해당 공지가 한 건도 없으면 자체적으로 렌더하지 않는다.
  * - 순차 처리(Ollama Cloud rate limit 회피 + 진행률 표시 용이).
  */
 function BackfillSummariesButton({ notices }: { notices: Notice[] }) {
@@ -618,10 +623,12 @@ function BackfillSummariesButton({ notices }: { notices: Notice[] }) {
     () =>
       notices.filter((n) => {
         const s = (n as Notice & { summary?: string | null }).summary;
-        const hasSummary = !!s && s.trim().length > 0;
+        const trimmed = s?.trim() ?? "";
+        const hasSummary = trimmed.length > 0;
+        const tooLong = trimmed.length > SUMMARY_HARD_CAP;
         // 본문이 MIN_CONTENT_LENGTH 미만이면 API 가 어차피 null 반환하므로 카운트에서 제외.
         const tooShort = n.content.trim().length < MIN_CONTENT_LENGTH;
-        return !hasSummary && !tooShort;
+        return (!hasSummary || tooLong) && !tooShort;
       }),
     [notices],
   );
@@ -649,7 +656,7 @@ function BackfillSummariesButton({ notices }: { notices: Notice[] }) {
   const processed = progress.done + progress.failed;
   const label = running
     ? `백필 중 ${processed}/${pending.length}…`
-    : `기존 공지 요약 백필 (${pending.length}건)`;
+    : `기존 공지 요약 백필/재생성 (${pending.length}건)`;
 
   return (
     <button
@@ -660,7 +667,7 @@ function BackfillSummariesButton({ notices }: { notices: Notice[] }) {
       title={
         running
           ? `처리 중: ${progress.done}건 성공, ${progress.failed}건 실패`
-          : "summary 없는 공지에 대해 AI 요약을 일괄 생성"
+          : `summary 가 없거나 ${SUMMARY_HARD_CAP}자를 넘는 공지를 일괄 (재)생성`
       }
     >
       {label}

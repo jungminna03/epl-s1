@@ -3,6 +3,7 @@ import {
   MAX_CONTENT_LENGTH,
   MIN_CONTENT_LENGTH,
   OLLAMA_TIMEOUT_MS,
+  SUMMARY_HARD_CAP,
   SUMMARY_SYSTEM_PROMPT,
 } from "@/lib/ai-summary";
 
@@ -94,7 +95,12 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "upstream" }, { status: 502 });
     }
 
-    return NextResponse.json({ summary: text.trim() }, { status: 200 });
+    const cleaned = text.trim();
+    const summary =
+      cleaned.length > SUMMARY_HARD_CAP
+        ? `${cleaned.slice(0, SUMMARY_HARD_CAP - 1)}…`
+        : cleaned;
+    return NextResponse.json({ summary }, { status: 200 });
   } catch (err) {
     if (err instanceof Error && err.name === "AbortError") {
       return NextResponse.json({ error: "timeout" }, { status: 504 });
