@@ -16,6 +16,7 @@ const _schema = i.schema({
       startDate: i.number().optional(),
       endDate: i.number().optional(),
       checkCount: i.number().optional(),
+      summary: i.string().optional(), // AI 요약. admin 저장 시 자동 생성, widget 자세히보기에서 노출.
     }),
     admins: i.entity({
       name: i.string(),

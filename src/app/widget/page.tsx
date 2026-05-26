@@ -15,7 +15,13 @@ import {
   useMotionValue,
 } from "framer-motion";
 import { db, type Notice } from "@/lib/instant";
-import { getEffectivePeriod, isNoticeVisible } from "@/lib/categories";
+import {
+  CATEGORY_STYLES,
+  DEFAULT_STYLE,
+  getEffectivePeriod,
+  isNoticeVisible,
+  parseCategories,
+} from "@/lib/categories";
 import { fireCheckEffect } from "@/lib/check-effects";
 import {
   loadReadState,
@@ -32,7 +38,7 @@ import {
  * 위젯이 사용자에게 의미있게 변할 때 같은 달 안에서 N 을 증가시키고,
  * 달이 바뀌면 N 을 1 로 리셋. 사람이 직접 갱신한다.
  */
-const WIDGET_VERSION = "V.2026.5.6";
+const WIDGET_VERSION = "V.2026.5.8";
 
 const CLOCK_INTERVAL_MS = 30_000;
 const PAGE_SIZE = 4;
@@ -791,6 +797,7 @@ function NoticeDetailOverlay({
         >
           {dateLabel}
         </p>
+        <SummaryBox notice={notice} />
         <div
           className="flex-1 overflow-y-auto whitespace-pre-wrap text-white"
           style={{
@@ -846,6 +853,62 @@ function NoticeDetailOverlay({
         </button>
       </motion.div>
     </motion.div>
+  );
+}
+
+/* ─── Summary Box ───────────────────────────────────── */
+
+function SummaryBox({ notice }: { notice: Notice }) {
+  const summary = (notice as Notice & { summary?: string | null }).summary;
+  if (!summary || summary.trim().length === 0) return null;
+
+  const cats = parseCategories(notice.category);
+  const style = cats.length > 0 ? CATEGORY_STYLES[cats[0]] : DEFAULT_STYLE;
+
+  return (
+    <div style={{ marginBottom: "1.6vh" }}>
+      <div
+        className="font-semibold"
+        style={{
+          color: style.color,
+          fontSize: "2.4vh",
+          marginBottom: "0.8vh",
+          letterSpacing: "0.05vh",
+          display: "flex",
+          alignItems: "center",
+          gap: "0.8vh",
+        }}
+      >
+        <svg
+          width="2.6vh"
+          height="2.6vh"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke={style.color}
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M12 3l1.9 4.6L18.5 9.5l-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9L12 3z" />
+          <path d="M19 14l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8.8-2z" />
+        </svg>
+        <span>AI 요약</span>
+      </div>
+      <div
+        className="text-slate-100"
+        style={{
+          background: "rgba(255,255,255,0.05)",
+          borderLeft: `0.5vh solid ${style.color}`,
+          borderRadius: "1vh",
+          padding: "1.6vh 2vh",
+          fontSize: "2.8vh",
+          lineHeight: 1.5,
+        }}
+      >
+        {summary}
+      </div>
+    </div>
   );
 }
 

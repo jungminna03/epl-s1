@@ -709,6 +709,9 @@ function ExpandedTile({
           {notice.title}
         </h2>
 
+        {/* AI Summary */}
+        <SummaryBox notice={notice} />
+
         {/* Body */}
         <p
           className="whitespace-pre-line text-slate-400 leading-[1.7]"
@@ -1130,5 +1133,61 @@ function MobileDetailModal({
         </div>
       </motion.div>
     </motion.div>
+  );
+}
+
+/* ─── AI Summary Box (expanded view 전용) ───────────── */
+
+function SummaryBox({ notice }: { notice: Notice }) {
+  const summary = (notice as Notice & { summary?: string | null }).summary;
+  if (!summary || summary.trim().length === 0) return null;
+
+  const cats = parseCategories(notice.category);
+  const style = cats.length > 0 ? CATEGORY_STYLES[cats[0]] : DEFAULT_STYLE;
+
+  return (
+    <div style={{ marginTop: "1.5vh", textAlign: "left" }}>
+      <div
+        className="font-semibold"
+        style={{
+          color: style.color,
+          fontSize: "1.8vh",
+          marginBottom: "0.7vh",
+          letterSpacing: "0.05vh",
+          display: "flex",
+          alignItems: "center",
+          gap: "0.6vh",
+        }}
+      >
+        <svg
+          width="2vh"
+          height="2vh"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke={style.color}
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M12 3l1.9 4.6L18.5 9.5l-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9L12 3z" />
+          <path d="M19 14l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8.8-2z" />
+        </svg>
+        <span>AI 요약</span>
+      </div>
+      <div
+        className="text-slate-100"
+        style={{
+          background: "rgba(255,255,255,0.05)",
+          borderLeft: `0.4vh solid ${style.color}`,
+          borderRadius: "0.8vh",
+          padding: "1.2vh 1.5vh",
+          fontSize: "1.5vh",
+          lineHeight: 1.55,
+        }}
+      >
+        {summary}
+      </div>
+    </div>
   );
 }

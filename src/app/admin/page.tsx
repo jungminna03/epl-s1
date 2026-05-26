@@ -17,6 +17,11 @@ import {
   getEffectivePeriod,
   parseCategories,
 } from "@/lib/categories";
+import {
+  MIN_CONTENT_LENGTH,
+  SUMMARY_HARD_CAP,
+  requestSummary,
+} from "@/lib/ai-summary";
 
 /**
  * /admin
@@ -131,6 +136,10 @@ interface FormState {
   link: string;
   startDate: string; // "YYYY-MM-DD"
   endDate: string;   // "" means 무기한
+  /** edit 모드 진입 시점의 content. 저장 시 비교해서 변경 없으면 요약 재사용. 새 공지는 빈 문자열. */
+  originalContent: string;
+  /** edit 모드 진입 시점의 summary. content 가 그대로면 이 값을 그대로 transact 에 포함. */
+  originalSummary: string | null;
 }
 
 const EMPTY_FORM: FormState = {
@@ -141,6 +150,8 @@ const EMPTY_FORM: FormState = {
   link: "",
   startDate: new Date().toISOString().slice(0, 10),
   endDate: "",
+  originalContent: "",
+  originalSummary: null,
 };
 
 function Dashboard({ onSignOut }: { onSignOut: () => void }) {
@@ -176,6 +187,8 @@ function Dashboard({ onSignOut }: { onSignOut: () => void }) {
       link: n.link ?? "",
       startDate: n.startDate ? msToDate(n.startDate) : msToDate(n.createdAt),
       endDate: n.endDate ? msToDate(n.endDate) : "",
+      originalContent: n.content,
+      originalSummary: (n as Notice & { summary?: string | null }).summary ?? null,
     });
     setMobileView("form");
   }
@@ -186,32 +199,46 @@ function Dashboard({ onSignOut }: { onSignOut: () => void }) {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.title.trim() || !form.content.trim()) {
+    const trimmedTitle = form.title.trim();
+    const trimmedContent = form.content.trim();
+    if (!trimmedTitle || !trimmedContent) {
       return;
     }
     setSubmitting(true);
     try {
+      // 본문이 그대로면 기존 summary 재사용 — 토큰 낭비 방지.
+      const contentUnchanged =
+        editing && trimmedContent === form.originalContent.trim();
+      let summary: string | null;
+      if (contentUnchanged) {
+        summary = form.originalSummary;
+      } else {
+        summary = await requestSummary(trimmedTitle, trimmedContent);
+      }
+
       if (editing && form.id) {
         await db.transact(
           db.tx.notices[form.id].update({
-            title: form.title.trim(),
-            content: form.content.trim(),
+            title: trimmedTitle,
+            content: trimmedContent,
             category: form.category || "",
             link: form.link.trim() || null,
             startDate: dateToMs(form.startDate),
             endDate: form.endDate ? dateToMs(form.endDate) : null,
+            summary: summary,
           }),
         );
       } else {
         await db.transact(
           db.tx.notices[id()].update({
-            title: form.title.trim(),
-            content: form.content.trim(),
+            title: trimmedTitle,
+            content: trimmedContent,
             category: form.category || "",
             link: form.link.trim() || null,
             createdAt: Date.now(),
             startDate: dateToMs(form.startDate),
             endDate: form.endDate ? dateToMs(form.endDate) : null,
+            summary: summary,
           }),
         );
       }
@@ -247,6 +274,7 @@ function Dashboard({ onSignOut }: { onSignOut: () => void }) {
             </h1>
           </div>
           <div className="flex items-center gap-2">
+            <BackfillSummariesButton notices={notices} />
             <a
               href="/display"
               target="_blank"
@@ -748,5 +776,68 @@ function MobileFormView({
         </div>
       </div>
     </motion.div>
+  );
+}
+
+/**
+ * 기존 공지에 대해 AI 요약을 일괄 생성/재생성하는 버튼.
+ * 대상: summary 가 비어있거나, 길이 정책(SUMMARY_HARD_CAP) 을 초과해 너무 긴 요약.
+ * - 해당 공지가 한 건도 없으면 자체적으로 렌더하지 않는다.
+ * - 순차 처리(Ollama Cloud rate limit 회피 + 진행률 표시 용이).
+ */
+function BackfillSummariesButton({ notices }: { notices: Notice[] }) {
+  const pending = useMemo(
+    () =>
+      notices.filter((n) => {
+        const s = (n as Notice & { summary?: string | null }).summary;
+        const trimmed = s?.trim() ?? "";
+        const hasSummary = trimmed.length > 0;
+        const tooLong = trimmed.length > SUMMARY_HARD_CAP;
+        // 본문이 MIN_CONTENT_LENGTH 미만이면 API 가 어차피 null 반환하므로 카운트에서 제외.
+        const tooShort = n.content.trim().length < MIN_CONTENT_LENGTH;
+        return (!hasSummary || tooLong) && !tooShort;
+      }),
+    [notices],
+  );
+
+  const [running, setRunning] = useState(false);
+  const [progress, setProgress] = useState({ done: 0, failed: 0 });
+
+  if (!running && pending.length === 0) return null;
+
+  async function handleClick() {
+    setRunning(true);
+    setProgress({ done: 0, failed: 0 });
+    for (const n of pending) {
+      const summary = await requestSummary(n.title, n.content);
+      try {
+        await db.transact(db.tx.notices[n.id].update({ summary }));
+        setProgress((p) => ({ ...p, done: p.done + 1 }));
+      } catch {
+        setProgress((p) => ({ ...p, failed: p.failed + 1 }));
+      }
+    }
+    setRunning(false);
+  }
+
+  const processed = progress.done + progress.failed;
+  const label = running
+    ? `백필 중 ${processed}/${pending.length}…`
+    : `기존 공지 요약 백필/재생성 (${pending.length}건)`;
+
+  return (
+    <button
+      type="button"
+      onClick={handleClick}
+      disabled={running}
+      className="rounded-full border border-cyan-700/40 bg-cyan-500/10 px-4 py-2 text-xs font-medium text-cyan-300 transition hover:border-cyan-500/80 hover:text-cyan-200 disabled:opacity-60"
+      title={
+        running
+          ? `처리 중: ${progress.done}건 성공, ${progress.failed}건 실패`
+          : `summary 가 없거나 ${SUMMARY_HARD_CAP}자를 넘는 공지를 일괄 (재)생성`
+      }
+    >
+      {label}
+    </button>
   );
 }
