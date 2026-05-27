@@ -765,7 +765,7 @@ function ExpandedTile({
         )}
 
         {/* Check button — big & tappable */}
-        <CheckButton notice={notice} />
+        <CheckButton notice={notice} onChecked={onClose} />
       </motion.div>
       </div>
     </motion.div>
@@ -776,8 +776,10 @@ function ExpandedTile({
 
 function CheckButton({
   notice,
+  onChecked,
 }: {
   notice: Notice;
+  onChecked?: () => void;
 }) {
   const [localAdded, setLocalAdded] = useState(0);
   const [locked, setLocked] = useState(false);
@@ -815,6 +817,8 @@ function CheckButton({
         lockTimer.current = setTimeout(() => setLocked(false), result.cooldownMs);
       }
     }
+
+    onChecked?.();
   }
 
   return (
@@ -1129,7 +1133,7 @@ function MobileDetailModal({
 
         {/* Check button */}
         <div className="mt-6">
-          <CheckButton notice={notice} />
+          <CheckButton notice={notice} onChecked={onClose} />
         </div>
       </motion.div>
     </motion.div>
