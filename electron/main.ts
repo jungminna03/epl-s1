@@ -22,17 +22,10 @@ import {
 } from "./updater";
 import { createWidgetWindow } from "./widget-window";
 
-import path from "node:path";
-import os from "node:os";
 import { exec } from "node:child_process";
 
 log.initialize();
 log.info(`[main] EPL widget 시작 (dev=${APP_CONFIG.isDev})`);
-
-// 캐시 문제 해결: userData 경로를 임시 폴더로 변경
-const userDataPath = path.join(os.tmpdir(), `epl-widget-${Date.now()}`);
-app.setPath("userData", userDataPath);
-log.info(`[main] userData path: ${userDataPath}`);
 
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
