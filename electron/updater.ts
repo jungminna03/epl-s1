@@ -5,6 +5,7 @@ import type { WidgetConfig } from "./bootstrap";
 import type { UpdateStatus } from "./preload";
 
 let pollTimer: ReturnType<typeof setInterval> | null = null;
+let updateDownloaded = false;
 
 export function setupAutoUpdater(
   getWindow: () => BrowserWindow | null,
@@ -36,8 +37,8 @@ export function setupAutoUpdater(
     push({ kind: "downloading", percent: p.percent }),
   );
   autoUpdater.on("update-downloaded", (info) => {
+    updateDownloaded = true;
     push({ kind: "downloaded", version: info.version });
-    // 다운로드 완료 후 앱 종료/재시작 시점에 설치되도록 둠.
   });
   autoUpdater.on("error", (err) =>
     push({ kind: "error", message: err.message }),
@@ -64,7 +65,9 @@ export function forceUpdateCheck(): Promise<unknown> {
   return autoUpdater.checkForUpdates();
 }
 
-/** 즉시 재시작하며 다운로드된 업데이트 설치 */
+/** 다운로드 완료 상태이면 즉시 재시작하며 설치. 아니면 no-op —
+ *  렌더러의 주기적 트리거에서 안전하게 호출할 수 있도록. */
 export function applyUpdateAndRestart(): void {
+  if (!updateDownloaded) return;
   autoUpdater.quitAndInstall();
 }

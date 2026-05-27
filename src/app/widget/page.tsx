@@ -38,7 +38,7 @@ import {
  * 위젯이 사용자에게 의미있게 변할 때 같은 달 안에서 N 을 증가시키고,
  * 달이 바뀌면 N 을 1 로 리셋. 사람이 직접 갱신한다.
  */
-const WIDGET_VERSION = "V.2026.5.8";
+const WIDGET_VERSION = "V.2026.5.9";
 
 const CLOCK_INTERVAL_MS = 30_000;
 const PAGE_SIZE = 4;
@@ -57,6 +57,7 @@ type EplApi = {
   sendToBack?: () => void;
   show?: () => void;
   openExternal?: (url: string) => void;
+  applyUpdateAndRestart?: () => void;
 };
 
 /**
@@ -124,11 +125,13 @@ function useReadState(visibleIds: string[], now: number) {
     });
   }, [now]);
 
-  // resetAt 이 바뀌었다는 건 사이클이 돌았다는 뜻 → 창을 맨 앞으로 부각.
+  // resetAt 이 바뀌었다는 건 사이클이 돌았다는 뜻 → 창을 맨 앞으로 부각 +
+  // 다운로드된 업데이트가 있으면 이 시점에 적용 (없으면 main 쪽이 no-op).
   useEffect(() => {
     if (state.resetAt !== lastResetAt.current) {
       lastResetAt.current = state.resetAt;
       bringToFront();
+      getEpl()?.applyUpdateAndRestart?.();
     }
   }, [state.resetAt]);
 
