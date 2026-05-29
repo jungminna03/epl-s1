@@ -12,6 +12,8 @@ import {
   type CategoryStyle,
 } from "@/lib/categories";
 import { fireCheckEffect } from "@/lib/check-effects";
+import FortunePanel from "@/components/fortune/FortunePanel";
+import CookiePanel from "@/components/cookie/CookiePanel";
 
 const CYCLE_MS = 10_000;
 const PAGE_SIZE = 4;
@@ -568,6 +570,7 @@ function ExpandedTile({
 }) {
   const cats = parseCategories(notice.category);
   const style = cats.length > 0 ? CATEGORY_STYLES[cats[0]] : DEFAULT_STYLE;
+  const [panelView, setPanelView] = useState<null | "fortune" | "cookie">(null);
 
   // --- Overscroll-to-close (touch + mouse) ---
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -764,10 +767,54 @@ function ExpandedTile({
           </button>
         )}
 
+        {/* Fortune & Cookie buttons */}
+        <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", gap: "1vh", marginTop: "2vh" }}>
+          <button
+            onClick={() => setPanelView("fortune")}
+            className="flex w-full items-center justify-center rounded-[0.8vh] border font-bold transition-all active:scale-[0.97]"
+            style={{
+              padding: "1.2vh 1vh",
+              gap: "0.6vh",
+              background: "linear-gradient(135deg, rgba(167,139,250,0.12), rgba(139,92,246,0.08))",
+              borderColor: "rgba(167,139,250,0.25)",
+              fontSize: "1.4vh",
+            }}
+          >
+            <span>🔮</span>
+            <span className="text-slate-200">오늘의 운세</span>
+          </button>
+          <button
+            onClick={() => setPanelView("cookie")}
+            className="flex w-full items-center justify-center rounded-[0.8vh] border font-bold transition-all active:scale-[0.97]"
+            style={{
+              padding: "1.2vh 1vh",
+              gap: "0.6vh",
+              background: "linear-gradient(135deg, rgba(251,191,36,0.12), rgba(245,158,11,0.08))",
+              borderColor: "rgba(251,191,36,0.25)",
+              fontSize: "1.4vh",
+            }}
+          >
+            <span>🥠</span>
+            <span className="text-slate-200">포춘쿠키</span>
+          </button>
+        </div>
+
         {/* Check button — big & tappable */}
         <CheckButton notice={notice} />
       </motion.div>
       </div>
+
+      {/* Fortune / Cookie overlay panels */}
+      {panelView === "fortune" && (
+        <div className="absolute inset-0 z-40" style={{ padding: "1vh" }}>
+          <FortunePanel onCloseFortune={() => setPanelView(null)} />
+        </div>
+      )}
+      {panelView === "cookie" && (
+        <div className="absolute inset-0 z-40" style={{ padding: "1vh" }}>
+          <CookiePanel onCloseCookie={() => setPanelView(null)} variant="display" />
+        </div>
+      )}
     </motion.div>
   );
 }
