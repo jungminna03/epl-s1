@@ -19,12 +19,12 @@ export default function FortuneLoading({ onCancel }: Props) {
           animate={{ rotate: -360 }} transition={{ duration: 0.9, repeat: Infinity, ease: "linear" }} />
       </div>
       <div className="text-center" style={{ marginTop: "2vh" }}>
-        <p className="font-bold text-slate-200" style={{ fontSize: "1.6vh", background: "linear-gradient(90deg, #a78bfa, #22d3ee)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>운세를 풀이하는 중...</p>
-        <p className="text-slate-500" style={{ fontSize: "1.1vh", marginTop: "0.6vh" }}>잠시만 기다려주세요</p>
+        <p className="font-bold text-slate-200" style={{ fontSize: "3.2vh", background: "linear-gradient(90deg, #a78bfa, #22d3ee)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>운세를 풀이하는 중...</p>
+        <p className="text-slate-500" style={{ fontSize: "2.2vh", marginTop: "0.6vh" }}>잠시만 기다려주세요</p>
       </div>
       {onCancel && (
         <button onClick={onCancel} className="mt-[2vh] rounded-full border px-[1.5vh] py-[0.6vh] text-slate-400 transition-all hover:text-slate-200"
-          style={{ borderColor: "rgba(148,163,184,0.15)", fontSize: "1.1vh" }}
+          style={{ borderColor: "rgba(148,163,184,0.15)", fontSize: "2.2vh" }}
         >취소</button>
       )}
     </motion.div>

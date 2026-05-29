@@ -47,7 +47,7 @@ export default function FortunePanel({ onCloseFortune }: Props) {
           <motion.div key="fortune-input" className="h-full" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
             <FortuneInputCard data={form} onChange={setForm} onSubmit={handleSubmit} onBack={handleBack} />
             {error && <div className="absolute inset-x-0 bottom-0 z-30 text-center" style={{ padding: "1vh 2vh" }}>
-              <div className="rounded-[0.8vh] border border-red-400/30 bg-red-400/10 px-[1.5vh] py-[1vh] text-red-200" style={{ fontSize: "1.2vh" }}>{error}</div>
+              <div className="rounded-[0.8vh] border border-red-400/30 bg-red-400/10 px-[1.5vh] py-[1vh] text-red-200" style={{ fontSize: "2.2vh" }}>{error}</div>
             </div>}
           </motion.div>
         )}
@@ -58,7 +58,7 @@ export default function FortunePanel({ onCloseFortune }: Props) {
         )}
         {view === "result" && result && (
           <motion.div key="fortune-result" className="h-full" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <FortuneResultCard result={result} form={form} onRetry={() => setView("input")} onBack={handleBack} />
+            <FortuneResultCard result={result} form={form} onBack={handleBack} />
           </motion.div>
         )}
       </AnimatePresence>
