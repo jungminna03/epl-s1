@@ -460,6 +460,8 @@ function GridTile({
   const cats = parseCategories(notice.category);
   const style = cats.length > 0 ? CATEGORY_STYLES[cats[0]] : DEFAULT_STYLE;
   const dbCount = getCheckCount(notice);
+  const summary = (notice as Notice & { summary?: string | null }).summary;
+  const snippet = summary && summary.trim().length > 0 ? summary : notice.content;
 
   return (
     <motion.div
@@ -517,15 +519,16 @@ function GridTile({
         >
           {notice.title}
         </h3>
-        {notice.content && (
+        {snippet && (
           <p
-            className="text-slate-400 leading-[1.4] truncate"
+            className="text-slate-300 leading-[1.4] line-clamp-3"
             style={{
-              fontSize: "1.3vh",
-              marginTop: "0.4vh",
+              fontSize: "1.5vh",
+              marginTop: "0.6vh",
+              whiteSpace: "pre-line",
             }}
           >
-            {notice.content}
+            {snippet}
           </p>
         )}
       </div>
@@ -999,6 +1002,8 @@ function MobileNoticeCard({
   const cats = parseCategories(notice.category);
   const style = cats.length > 0 ? CATEGORY_STYLES[cats[0]] : DEFAULT_STYLE;
   const dbCount = getCheckCount(notice);
+  const summary = (notice as Notice & { summary?: string | null }).summary;
+  const snippet = summary && summary.trim().length > 0 ? summary : notice.content;
 
   return (
     <motion.button
@@ -1027,9 +1032,9 @@ function MobileNoticeCard({
         <h3 className="mt-2 text-base font-bold text-slate-50 line-clamp-1">
           {notice.title}
         </h3>
-        {notice.content && (
-          <p className="mt-1 text-sm text-slate-400 line-clamp-2">
-            {notice.content}
+        {snippet && (
+          <p className="mt-1 whitespace-pre-line text-sm text-slate-300 line-clamp-3">
+            {snippet}
           </p>
         )}
         <div className="mt-2 flex items-center justify-between">
