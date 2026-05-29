@@ -58,7 +58,7 @@ export default function FortunePanel({ onCloseFortune }: Props) {
         )}
         {view === "result" && result && (
           <motion.div key="fortune-result" className="h-full" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <FortuneResultCard result={result} form={form} onRetry={() => setView("input")} onBack={handleBack} />
+            <FortuneResultCard result={result} form={form} onBack={handleBack} />
           </motion.div>
         )}
       </AnimatePresence>

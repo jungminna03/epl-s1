@@ -3,9 +3,9 @@
 import { motion } from "framer-motion";
 import { type FortuneResult, type FortuneFormData, genderLabel } from "@/lib/fortune";
 
-interface Props { result: FortuneResult; form: FortuneFormData; onRetry: () => void; onBack: () => void; }
+interface Props { result: FortuneResult; form: FortuneFormData; onBack: () => void; }
 
-export default function FortuneResultCard({ result, form, onRetry, onBack }: Props) {
+export default function FortuneResultCard({ result, form, onBack }: Props) {
   const today = new Date();
   const dateStr = `${today.getFullYear()}년 ${today.getMonth() + 1}월 ${today.getDate()}일`;
   const weekday = ["일", "월", "화", "수", "목", "금", "토"][today.getDay()];
@@ -50,13 +50,6 @@ export default function FortuneResultCard({ result, form, onRetry, onBack }: Pro
       </div>
 
       <div className="shrink-0 flex flex-col" style={{ padding: "1.5vh 2.5vh 2vh", gap: "1vh" }}>
-        <button onClick={onRetry} className="flex w-full items-center justify-center rounded-[1vh] border font-bold transition-all active:scale-[0.97]"
-          style={{
-            padding: "1.4vh 2vh", gap: "0.6vh",
-            background: "linear-gradient(135deg, rgba(167,139,250,0.15), rgba(34,211,238,0.10))",
-            borderColor: "rgba(167,139,250,0.25)", color: "#e2e8f0", fontSize: "1.4vh",
-          }}
-        ><span>🔄</span><span>다시 보기</span></button>
         <button onClick={onBack} className="flex w-full items-center justify-center rounded-[1vh] border font-medium transition-all hover:bg-slate-800/50"
           style={{ padding: "1.2vh 2vh", gap: "0.6vh", borderColor: "rgba(148,163,184,0.15)", fontSize: "1.3vh", color: "#94a3b8" }}
         ><span>←</span><span>공지사항으로</span></button>
