@@ -30,6 +30,7 @@ import {
   saveReadState,
   type ReadState,
 } from "@/lib/widget-read-state";
+import FortunePanel from "@/components/fortune/FortunePanel";
 
 /* ─── 상수 ──────────────────────────────────────────── */
 
@@ -216,6 +217,7 @@ export default function WidgetPage() {
         {selectedNotice && (
           <NoticeDetailOverlay
             notice={selectedNotice}
+            now={now}
             onClose={() => setSelectedNotice(null)}
             onConfirm={markReadFn}
           />
@@ -274,7 +276,7 @@ function WidgetHeader({
           <span style={{ letterSpacing: "-0.02vh" }}>
             <span
               className="font-extrabold"
-              style={{
+style={{
                 fontSize: "1.15em",
                 background: "linear-gradient(90deg, #22d3ee, #60a5fa, #a78bfa)",
                 WebkitBackgroundClip: "text",
@@ -293,9 +295,30 @@ function WidgetHeader({
           </span>
           <UnreadBadge count={unreadCount} />
         </span>
+        <TimeDisplay />
       </div>
     </header>
   );
+}
+
+function TimeDisplay() {
+  const [time, setTime] = useState(() => formatTime(new Date()));
+  useEffect(() => {
+    const id = setInterval(() => setTime(formatTime(new Date())), 1000);
+    return () => clearInterval(id);
+  }, []);
+  return (
+    <span
+      className="font-extrabold text-white leading-none"
+      style={{ fontSize: "3.5vh" }}
+    >
+      {time}
+    </span>
+  );
+}
+
+function formatTime(d: Date) {
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
 function HeaderControl() {
@@ -552,16 +575,16 @@ function MarqueeTitle({ text }: { text: string }) {
     return () => ro.disconnect();
   }, [text]);
 
-  // framer-motion 의 keyframes animate 대신 useAnimationFrame 으로 직접 모션값을
-  // 매 프레임 갱신한다. 부모 motion.button 의 layoutId layout 트래킹이 자식의
-  // transform animate 를 reset 하는 충돌을 피하기 위함.
+  // framer-motion의 keyframes animate 대신 useAnimationFrame으로 직접 모션값을
+  // 매 프레임 갱신한다. 부모 motion.button의 layoutId layout 트래킹이 자식의
+  // transform animate를 reset하는 충돌을 피하기 위함.
   const x = useMotionValue(0);
   const startRef = useRef<number | null>(null);
   useAnimationFrame((t) => {
     if (!state.over || state.distance <= 0) return;
     if (startRef.current == null) startRef.current = t;
     const elapsedS = (t - startRef.current) / 1000;
-    const cycleS = state.distance / MARQUEE_SPEED_PX_PER_S;
+      const cycleS = state.distance / MARQUEE_SPEED_PX_PER_S;
     const phase = (elapsedS % cycleS) / cycleS;
     x.set(-phase * state.distance);
   });
@@ -632,6 +655,7 @@ function NoticeCard({
         borderRadius: "1.8vh",
         boxShadow: isExpiringSoon ? "inset 0 0 0 0.3vh #facc15" : undefined,
       }}
+      whileTap={{ scale: 0.98 }}
     >
       <MarqueeTitle text={notice.title} />
       {isUnread && <UnreadDot />}
@@ -685,7 +709,7 @@ function LinkCard({ url }: { url: string }) {
         className="flex shrink-0 items-center justify-center rounded-[0.6vh] bg-slate-700/50"
         style={{ width: "3vh", height: "3vh" }}
       >
-        <span style={{ fontSize: "3.2vh" }}>🔗</span>
+        <span style={{ fontSize: "3.2vh" }}>🔖</span>
       </div>
       <div className="min-w-0 flex-1 text-left">
         <p
@@ -714,13 +738,16 @@ function LinkCard({ url }: { url: string }) {
 
 function NoticeDetailOverlay({
   notice,
+  now,
   onClose,
   onConfirm,
 }: {
   notice: Notice;
+  now: number;
   onClose: () => void;
   onConfirm: (id: string) => void;
 }) {
+  const [fortuneView, setFortuneView] = useState(false);
   const [locked, setLocked] = useState(false);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
@@ -754,6 +781,9 @@ function NoticeDetailOverlay({
     created.getMonth() + 1,
   ).padStart(2, "0")}/${String(created.getDate()).padStart(2, "0")}`;
 
+  const cats = parseCategories(notice.category);
+  const style = cats.length > 0 ? CATEGORY_STYLES[cats[0]] : DEFAULT_STYLE;
+
   return (
     <motion.div
       className="absolute inset-0 z-50 flex items-end justify-center"
@@ -783,77 +813,160 @@ function NoticeDetailOverlay({
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        <h2
-          className="font-extrabold text-white"
-          style={{
-            fontSize: "6vh",
-            lineHeight: 1.2,
-            letterSpacing: "-0.05vh",
-            marginBottom: "0.6vh",
-          }}
-        >
-          {notice.title}
-        </h2>
-        <p
-          className="text-slate-400"
-          style={{ fontSize: "2.6vh", marginBottom: "1.6vh" }}
-        >
-          {dateLabel}
-        </p>
-        <SummaryBox notice={notice} />
-        <div
-          className="flex-1 overflow-y-auto whitespace-pre-wrap text-white"
-          style={{
-            fontSize: "3.4vh",
-            lineHeight: 1.55,
-            marginBottom: "1.6vh",
-            scrollbarWidth: "thin",
-            scrollbarColor: "#777 #444",
-          }}
-        >
-          {notice.content || "(내용 없음)"}
-        </div>
-
-        {notice.link && <LinkCard url={notice.link} />}
-
+        {/* Close X */}
         <button
-          ref={btnRef}
-          type="button"
-          onClick={handleCheck}
-          disabled={locked}
-          className="flex w-full items-center justify-center rounded-[1.2vh] border transition-all active:scale-[0.97]"
+          onClick={onClose}
+          className="absolute z-30 flex items-center justify-center rounded-full"
           style={{
-            padding: "2.2vh 2vh",
-            gap: "1.2vh",
-            background: locked
-              ? "rgba(30,41,59,0.5)"
-              : "linear-gradient(135deg, rgba(167,139,250,0.18), rgba(34,211,238,0.12))",
-            borderColor: locked
-              ? "rgba(100,116,139,0.2)"
-              : "rgba(167,139,250,0.3)",
-            opacity: locked ? 0.6 : 1,
-            pointerEvents: locked ? "none" : "auto",
+            top: "1.5vh",
+            right: "1.5vh",
+            width: "4vh",
+            height: "4vh",
+            background: "rgba(248,250,252,0.08)",
+            border: "1px solid rgba(248,250,252,0.15)",
           }}
         >
-          <span
-            className="flex items-center justify-center rounded-full font-bold text-white"
-            style={{
-              width: "4vh",
-              height: "4vh",
-              background: "linear-gradient(135deg, #22d3ee, #60a5fa, #a78bfa)",
-              fontSize: "2.2vh",
-              boxShadow: "0 0 1.5vh rgba(96,165,250,0.35)",
-            }}
+          <svg
+            width="40%"
+            height="40%"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="white"
+            strokeWidth="2.5"
           >
-            ✓
-          </span>
-          <span
-            className="font-bold text-white"
-            style={{ fontSize: "4vh", lineHeight: 1 }}
-          >
-            확인했어요
-          </span>
+            <line x1="6" y1="6" x2="18" y2="18" />
+            <line x1="18" y1="6" x2="6" y2="18" />
+          </svg>
         </button>
+
+        {fortuneView ? (
+          <div
+            className="absolute inset-0 z-40"
+            style={{ padding: "1vh 2.5vh 2vh" }}
+          >
+            <FortunePanel onCloseFortune={() => setFortuneView(false)} />
+          </div>
+        ) : (
+          <>
+            {/* Ambient glow */}
+            <div
+              className="pointer-events-none absolute -left-[30%] -top-[30%] h-[160%] w-[160%] opacity-40"
+              style={{
+                background:
+                  (style as { glowGradient?: string }).glowGradient,
+              }}
+            />
+
+            {cats.length > 0 && (
+              <div className="flex flex-wrap" style={{ gap: "0.5vh" }}>
+                {cats.map((c) => (
+                  <span
+                    key={c}
+                    className={`inline-flex items-center rounded-full border font-bold ${CATEGORY_STYLES[c].badge}`}
+                    style={{ fontSize: "1.2vh", padding: "0.4vh 1.2vh" }}
+                  >
+                    {CATEGORY_STYLES[c].label}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            <h2
+              className="font-extrabold text-white"
+              style={{
+                fontSize: "6vh",
+                lineHeight: 1.2,
+                letterSpacing: "-0.05vh",
+                marginBottom: "0.6vh",
+              }}
+            >
+              {notice.title}
+            </h2>
+            <p
+              className="text-slate-400"
+              style={{ fontSize: "2.6vh", marginBottom: "1.6vh" }}
+            >
+              {dateLabel}
+            </p>
+
+            <SummaryBox notice={notice} />
+
+            <div
+              className="flex-1 overflow-y-auto whitespace-pre-wrap text-white"
+              style={{
+                fontSize: "3.4vh",
+                lineHeight: 1.55,
+                marginBottom: "1.6vh",
+                scrollbarWidth: "thin",
+                scrollbarColor: "#777 #444",
+              }}
+            >
+              {notice.content || "(내용 없음)"}
+            </div>
+
+            {notice.link && <LinkCard url={notice.link} />}
+
+            {/* Fortune button */}
+            <button
+              onClick={() => setFortuneView(true)}
+              className="flex w-full items-center justify-center rounded-[1.2vh] border font-bold transition-all active:scale-[0.97]"
+              style={{
+                marginTop: "1.5vh",
+                padding: "1.6vh 2vh",
+                gap: "1vh",
+                background:
+                  "linear-gradient(135deg, rgba(167,139,250,0.12), rgba(139,92,246,0.08))",
+                borderColor: "rgba(167,139,250,0.25)",
+                fontSize: "2.4vh",
+              }}
+            >
+              <span>🔮</span>
+              <span className="text-slate-200">오늘의 운세</span>
+            </button>
+
+            {/* Check button */}
+            <button
+              ref={btnRef}
+              type="button"
+              onClick={handleCheck}
+              disabled={locked}
+              className="flex w-full items-center justify-center rounded-[1.2vh] border transition-all active:scale-[0.97]"
+              style={{
+                marginTop: "1.2vh",
+                padding: "2.2vh 2vh",
+                gap: "1.2vh",
+                background: locked
+                  ? "rgba(30,41,59,0.5)"
+                  : "linear-gradient(135deg, rgba(167,139,250,0.18), rgba(34,211,238,0.12))",
+                borderColor: locked
+                  ? "rgba(100,116,139,0.2)"
+                  : "rgba(167,139,250,0.3)",
+                opacity: locked ? 0.6 : 1,
+                pointerEvents: locked ? "none" : "auto",
+              }}
+            >
+              <span
+                className="flex items-center justify-center rounded-full font-bold text-white"
+                style={{
+                  width: "4vh",
+                  height: "4vh",
+                  background:
+                    "linear-gradient(135deg, #22d3ee, #60a5fa, #a78bfa)",
+                  fontSize: "2.2vh",
+                  boxShadow: "0 0 1.5vh rgba(96,165,250,0.35)",
+                }}
+              >
+                ✓
+              </span>
+              <span
+                className="font-bold text-white"
+                style={{ fontSize: "4vh", lineHeight: 1 }}
+              >
+                확인했어요
+              </span>
+            </button>
+          </>
+        )}
       </motion.div>
     </motion.div>
   );
