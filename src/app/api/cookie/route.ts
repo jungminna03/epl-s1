@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
 import type { CookieResult } from "@/lib/cookie";
 
-const OLLAMA_CLOUD_API_KEY = process.env.OLLAMA_CLOUD_API_KEY;
-const OLLAMA_CLOUD_BASE_URL = process.env.OLLAMA_CLOUD_BASE_URL ?? "https://ollama.com";
-const OLLAMA_CLOUD_MODEL = process.env.OLLAMA_CLOUD_MODEL ?? "gemma3:4b";
+const OLLAMA_API_KEY = process.env.OLLAMA_API_KEY;
+const COOKIE_MODEL = "gemma3:4b";
 
 function buildPrompt(concept: string, starCount: number): string {
   const today = new Date();
@@ -75,23 +74,22 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: "주제가 필요합니다." }, { status: 400 });
     }
 
-    if (!OLLAMA_CLOUD_API_KEY) {
+    if (!OLLAMA_API_KEY) {
       return NextResponse.json({ success: false, error: "API 키가 설정되지 않았습니다." }, { status: 500 });
     }
 
     const starCount = Math.floor(Math.random() * 5) + 1;
     const forcedStars = "★".repeat(starCount) + "☆".repeat(5 - starCount);
     const prompt = buildPrompt(concept, starCount);
-    const url = `${OLLAMA_CLOUD_BASE_URL}/api/generate`;
 
-    const res = await fetch(url, {
+    const res = await fetch("https://ollama.com/api/generate", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${OLLAMA_CLOUD_API_KEY}`,
+        "Authorization": `Bearer ${OLLAMA_API_KEY}`,
       },
       body: JSON.stringify({
-        model: OLLAMA_CLOUD_MODEL,
+        model: COOKIE_MODEL,
         prompt,
         stream: false,
         options: { temperature: 0.85, num_predict: 400 },
@@ -100,8 +98,8 @@ export async function POST(request: Request) {
 
     if (!res.ok) {
       const errText = await res.text().catch(() => "");
-      console.error("[Ollama Cloud Cookie]", res.status, errText);
-      return NextResponse.json({ success: false, error: `Ollama Cloud 오류 (${res.status})` }, { status: 502 });
+      console.error("[Ollama Cookie]", res.status, errText);
+      return NextResponse.json({ success: false, error: `Ollama 오류 (${res.status})` }, { status: 502 });
     }
 
     const json = (await res.json()) as { response?: string };
