@@ -31,6 +31,7 @@ import {
   type ReadState,
 } from "@/lib/widget-read-state";
 import FortunePanel from "@/components/fortune/FortunePanel";
+import CookiePanel from "@/components/cookie/CookiePanel";
 
 /* ─── 상수 ──────────────────────────────────────────── */
 
@@ -748,6 +749,7 @@ function NoticeDetailOverlay({
   onConfirm: (id: string) => void;
 }) {
   const [fortuneView, setFortuneView] = useState(false);
+  const [cookieView, setCookieView] = useState(false);
   const [locked, setLocked] = useState(false);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
@@ -846,6 +848,13 @@ function NoticeDetailOverlay({
           >
             <FortunePanel onCloseFortune={() => setFortuneView(false)} />
           </div>
+        ) : cookieView ? (
+          <div
+            className="absolute inset-0 z-40"
+            style={{ padding: "1vh 2.5vh 2vh" }}
+          >
+            <CookiePanel onCloseCookie={() => setCookieView(false)} variant="widget" />
+          </div>
         ) : (
           <>
             {/* Ambient glow */}
@@ -906,23 +915,39 @@ function NoticeDetailOverlay({
 
             {notice.link && <LinkCard url={notice.link} />}
 
-            {/* Fortune button */}
-            <button
-              onClick={() => setFortuneView(true)}
-              className="flex w-full items-center justify-center rounded-[1.2vh] border font-bold transition-all active:scale-[0.97]"
-              style={{
-                marginTop: "1.5vh",
-                padding: "1.6vh 2vh",
-                gap: "1vh",
-                background:
-                  "linear-gradient(135deg, rgba(167,139,250,0.12), rgba(139,92,246,0.08))",
-                borderColor: "rgba(167,139,250,0.25)",
-                fontSize: "2.4vh",
-              }}
-            >
-              <span>🔮</span>
-              <span className="text-slate-200">오늘의 운세</span>
-            </button>
+            {/* Fortune & Cookie buttons */}
+            <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", gap: "1vh", marginTop: "1.5vh" }}>
+              <button
+                onClick={() => setFortuneView(true)}
+                className="flex w-full items-center justify-center rounded-[1.2vh] border font-bold transition-all active:scale-[0.97]"
+                style={{
+                  padding: "1.6vh 2vh",
+                  gap: "1vh",
+                  background:
+                    "linear-gradient(135deg, rgba(167,139,250,0.12), rgba(139,92,246,0.08))",
+                  borderColor: "rgba(167,139,250,0.25)",
+                  fontSize: "2.4vh",
+                }}
+              >
+                <span>🔮</span>
+                <span className="text-slate-200">오늘의 운세</span>
+              </button>
+              <button
+                onClick={() => setCookieView(true)}
+                className="flex w-full items-center justify-center rounded-[1.2vh] border font-bold transition-all active:scale-[0.97]"
+                style={{
+                  padding: "1.6vh 2vh",
+                  gap: "1vh",
+                  background:
+                    "linear-gradient(135deg, rgba(251,191,36,0.12), rgba(245,158,11,0.08))",
+                  borderColor: "rgba(251,191,36,0.25)",
+                  fontSize: "2.4vh",
+                }}
+              >
+                <span>🥠</span>
+                <span className="text-slate-200">포춘쿠키</span>
+              </button>
+            </div>
 
             {/* Check button */}
             <button
