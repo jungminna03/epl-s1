@@ -40,7 +40,7 @@ import CookiePanel from "@/components/cookie/CookiePanel";
  * 위젯이 사용자에게 의미있게 변할 때 같은 달 안에서 N 을 증가시키고,
  * 달이 바뀌면 N 을 1 로 리셋. 사람이 직접 갱신한다.
  */
-const WIDGET_VERSION = "V.2026.6.1";
+const WIDGET_VERSION = "V.2026.6.2";
 
 const CLOCK_INTERVAL_MS = 30_000;
 const PAGE_SIZE = 4;

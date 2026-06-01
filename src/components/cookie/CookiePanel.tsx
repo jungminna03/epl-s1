@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { type CookieResult, type CookieConcept, type CookieView, type CookieVariant, fetchCookie } from "@/lib/cookie";
 import CookieSelectCard from "./CookieSelectCard";
@@ -14,6 +14,19 @@ export default function CookiePanel({ onCloseCookie, variant = "widget" }: Props
   const [result, setResult] = useState<CookieResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+
+  // 배포 Electron 위젯은 `focusable:false` 라 native 입력이 막힌다.
+  // CookiePanel 은 현재 native input 이 없지만 향후 추가될 수 있고, 패널
+  // 단위로 일관되게 토글해두는 게 안전. CLAUDE.md "Electron 위젯 창 포커스 정책" 참고.
+  useEffect(() => {
+    const epl = typeof window !== "undefined"
+      ? (window as Window & { epl?: { setFocusable?: (v: boolean) => void } }).epl
+      : undefined;
+    epl?.setFocusable?.(true);
+    return () => {
+      epl?.setFocusable?.(false);
+    };
+  }, []);
 
   const startCookie = useCallback(async (concept: CookieConcept) => {
     setView("loading"); setError(null);
