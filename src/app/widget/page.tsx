@@ -40,7 +40,7 @@ import CookiePanel from "@/components/cookie/CookiePanel";
  * 위젯이 사용자에게 의미있게 변할 때 같은 달 안에서 N 을 증가시키고,
  * 달이 바뀌면 N 을 1 로 리셋. 사람이 직접 갱신한다.
  */
-const WIDGET_VERSION = "V.2026.6.3";
+const WIDGET_VERSION = "V.2026.6.4";
 
 const CLOCK_INTERVAL_MS = 30_000;
 const PAGE_SIZE = 4;
@@ -898,19 +898,21 @@ function NoticeDetailOverlay({
               {dateLabel}
             </p>
 
-            <SummaryBox notice={notice} />
-
             <div
-              className="flex-1 overflow-y-auto whitespace-pre-wrap text-white"
+              className="flex-1 overflow-y-auto"
               style={{
-                fontSize: "3.4vh",
-                lineHeight: 1.55,
                 marginBottom: "1.6vh",
                 scrollbarWidth: "thin",
                 scrollbarColor: "#777 #444",
               }}
             >
-              {notice.content || "(내용 없음)"}
+              <SummaryBox notice={notice} />
+              <div
+                className="whitespace-pre-wrap text-white"
+                style={{ fontSize: "3.4vh", lineHeight: 1.55 }}
+              >
+                {notice.content || "(내용 없음)"}
+              </div>
             </div>
 
             {notice.link && <LinkCard url={notice.link} />}
