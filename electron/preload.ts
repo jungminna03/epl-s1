@@ -24,6 +24,13 @@ contextBridge.exposeInMainWorld("epl", {
   setBounds: (b: Partial<Bounds>) => ipcRenderer.send("widget:set-bounds", b),
   setAlwaysOnTop: (value: boolean) =>
     ipcRenderer.send("widget:set-always-on-top", value),
+  /**
+   * 위젯 창을 일시적으로 포커스 가능한 상태로 토글한다.
+   * 배포 모드에서 native `<select>` / `<input>` 입력이 필요한 패널이 열릴 때 true,
+   * 닫힐 때 false 로 호출. dev 모드는 사실상 no-op.
+   */
+  setFocusable: (value: boolean) =>
+    ipcRenderer.send("widget:set-focusable", value),
   sendToBack: () => ipcRenderer.send("widget:send-to-back"),
   setOpacity: (value: number) => ipcRenderer.send("widget:set-opacity", value),
   setIgnoreMouseEvents: (value: boolean, opts?: { forward?: boolean }) =>
@@ -107,6 +114,7 @@ declare global {
       // 창 조작
       setBounds: (b: Partial<Bounds>) => void;
       setAlwaysOnTop: (value: boolean) => void;
+      setFocusable: (value: boolean) => void;
       sendToBack: () => void;
       setOpacity: (value: number) => void;
       setIgnoreMouseEvents: (value: boolean, opts?: { forward?: boolean }) => void;

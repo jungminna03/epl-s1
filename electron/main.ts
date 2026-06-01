@@ -20,9 +20,19 @@ import {
   forceUpdateCheck,
   setupAutoUpdater,
 } from "./updater";
-import { createWidgetWindow } from "./widget-window";
+import { createWidgetWindow, setWidgetInteractive } from "./widget-window";
 
+import path from "node:path";
+import os from "node:os";
 import { exec } from "node:child_process";
+
+if (APP_CONFIG.isDev) {
+  // 프로덕션 설치본(EPL 공지사항.exe)과 userData 가 같으면 캐시 파일 락이
+  // 충돌해 cache_util_win.cc 가 "Unable to move the cache" 를 뱉고 첫
+  // loadURL 이 ERR_FAILED 로 죽는다. prod 는 updater/log 누적 때문에
+  // 영속 userData 가 필요하므로 dev 만 분리.
+  app.setPath("userData", path.join(os.tmpdir(), "epl-widget-dev"));
+}
 
 log.initialize();
 log.info(`[main] EPL widget 시작 (dev=${APP_CONFIG.isDev})`);
@@ -291,6 +301,11 @@ function registerIpc(
       win.setAlwaysOnTop(false);
       win.blur();
     }
+  });
+  ipcMain.on("widget:set-focusable", (_e, value: boolean) => {
+    const win = getWindow();
+    if (!win) return;
+    setWidgetInteractive(win, Boolean(value));
   });
   ipcMain.on("widget:send-to-back", () => {
     const win = getWindow();

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { type FortuneFormData, type FortuneResult, fetchFortune } from "@/lib/fortune";
 import FortuneInputCard from "./FortuneInputCard";
@@ -15,6 +15,20 @@ export default function FortunePanel({ onCloseFortune }: Props) {
   const [result, setResult] = useState<FortuneResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+
+  // 배포 모드에서 위젯 창은 `focusable:false` + focus→blur 정책으로 절대 포커스를
+  // 잡지 못한다 (의도: 다른 창 뒤로 가려져 있어야 함). 그런데 운세 패널의 native
+  // `<select>` 드롭다운은 윈도우가 포커스를 잡아야만 popup 이 열린다. 패널이 열린
+  // 동안만 한시적으로 focusable 을 풀고, 닫힐 때 원복한다. dev 모드는 no-op.
+  useEffect(() => {
+    const epl = typeof window !== "undefined"
+      ? (window as Window & { epl?: { setFocusable?: (v: boolean) => void } }).epl
+      : undefined;
+    epl?.setFocusable?.(true);
+    return () => {
+      epl?.setFocusable?.(false);
+    };
+  }, []);
 
   const handleSubmit = useCallback(async () => {
     setView("loading"); setError(null);

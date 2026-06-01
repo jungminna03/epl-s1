@@ -60,6 +60,32 @@ Claude / 협업자가 막혔다고 새 라이브러리를 임의 추가하지 �
   - 달이 바뀌면 `년도.월` 을 현재 시점으로 갱신하고 `업데이트횟수`를 다시 `1` 부터 시작한다.
 - 위젯별로 버전은 독립적으로 관리한다.
 
+# Electron 위젯 창 포커스 정책 (중요)
+
+배포 모드(`!isDev`)의 위젯 창은 **절대 포커스를 잡지 못하게** 만들어져 있다.
+"항상 다른 창 뒤로 가려져 있어야 한다" 는 제품 요구사항 때문이다.
+
+- `electron/widget-window.ts` — `focusable: APP_CONFIG.isDev` 로 배포 시 `focusable:false`
+- `electron/widget-window.ts` — `win.on("focus", () => win.blur())` 핸들러로 포커스가 잠시 잡혀도 즉시 해제
+- 토글 스위치는 `electron/config.ts` 의 `windowBehavior.stayInBackground = !isDev`
+
+**부작용**: 윈도우 포커스가 필요한 모든 native UI 가 망가진다.
+- `<select>` 드롭다운 popup 이 열렸다가 즉시 닫힘 → 선택 불가
+- `<input>` 의 한글 IME, 컨텍스트 메뉴, 키보드 입력 전부 영향
+- 단순 click 핸들러(버튼 등)는 영향 없음 — 포커스 안 받아도 click event 는 발화
+
+**해결 패턴**: 사용자 입력이 필요한 패널이 열린 동안만 한시적으로 토글한다.
+
+- `electron/widget-window.ts` 의 `setWidgetInteractive(win, value)` 를 사용
+- 렌더러에서는 `window.epl.setFocusable(true)` / `setFocusable(false)`
+- 패널 컴포넌트의 `useEffect` mount/unmount 에서 호출 (참고: `src/components/fortune/FortunePanel.tsx`)
+
+**새로 native input 을 쓰는 패널을 만들 때 체크리스트**:
+1. 컴포넌트 mount 시 `window.epl?.setFocusable?.(true)` 호출
+2. cleanup 에서 `setFocusable(false)` 로 원복
+3. dev 모드는 이미 focusable 이라 no-op — 따로 분기 안 해도 됨
+4. 가능하면 native `<select>` 대신 커스텀 드롭다운 컴포넌트도 검토 (focusable 정책 안 건드려도 됨)
+
 # MCP 서버 협업 규칙
 
 | 파일 | 용도 | git |
