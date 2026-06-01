@@ -1110,6 +1110,7 @@ function MobileDetailModal({
   const linkDomain = notice.link
     ? (() => { try { return new URL(notice.link).hostname; } catch { return notice.link; } })()
     : null;
+  const [panelView, setPanelView] = useState<null | "fortune" | "cookie">(null);
 
   return (
     <motion.div
@@ -1124,7 +1125,7 @@ function MobileDetailModal({
         animate={{ y: 0 }}
         exit={{ y: "100%" }}
         transition={{ type: "spring", damping: 25, stiffness: 300 }}
-        className="h-[85vh] w-full overflow-y-auto rounded-t-2xl bg-[#0f1219] p-5"
+        className="relative h-[85vh] w-full overflow-y-auto rounded-t-2xl bg-[#0f1219] p-5"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Handle bar */}
@@ -1163,6 +1164,11 @@ function MobileDetailModal({
           {formatRelative(notice.createdAt, now)}
         </p>
 
+        {/* AI Summary */}
+        <div className="mt-4">
+          <SummaryBox notice={notice} />
+        </div>
+
         {/* Content */}
         <p className="mt-4 whitespace-pre-line text-base leading-relaxed text-slate-300">
           {notice.content || "내용이 없습니다."}
@@ -1183,10 +1189,48 @@ function MobileDetailModal({
           </button>
         )}
 
+        {/* Fortune & Cookie buttons */}
+        <div className="mt-4 grid grid-cols-2 gap-2">
+          <button
+            onClick={() => setPanelView("fortune")}
+            className="flex w-full items-center justify-center gap-2 rounded-xl border px-3 py-3 text-sm font-bold active:scale-[0.97]"
+            style={{
+              background: "linear-gradient(135deg, rgba(167,139,250,0.12), rgba(139,92,246,0.08))",
+              borderColor: "rgba(167,139,250,0.25)",
+            }}
+          >
+            <span>🔮</span>
+            <span className="text-slate-200">오늘의 운세</span>
+          </button>
+          <button
+            onClick={() => setPanelView("cookie")}
+            className="flex w-full items-center justify-center gap-2 rounded-xl border px-3 py-3 text-sm font-bold active:scale-[0.97]"
+            style={{
+              background: "linear-gradient(135deg, rgba(251,191,36,0.12), rgba(245,158,11,0.08))",
+              borderColor: "rgba(251,191,36,0.25)",
+            }}
+          >
+            <span>🥠</span>
+            <span className="text-slate-200">포춘쿠키</span>
+          </button>
+        </div>
+
         {/* Check button */}
         <div className="mt-6">
           <CheckButton notice={notice} onChecked={onClose} />
         </div>
+
+        {/* Fortune / Cookie overlay panels */}
+        {panelView === "fortune" && (
+          <div className="absolute inset-0 z-40 rounded-t-2xl bg-[#0f1219] p-3">
+            <FortunePanel onCloseFortune={() => setPanelView(null)} />
+          </div>
+        )}
+        {panelView === "cookie" && (
+          <div className="absolute inset-0 z-40 rounded-t-2xl bg-[#0f1219] p-3">
+            <CookiePanel onCloseCookie={() => setPanelView(null)} variant="display" />
+          </div>
+        )}
       </motion.div>
     </motion.div>
   );
