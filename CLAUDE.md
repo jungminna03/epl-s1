@@ -93,7 +93,7 @@ Claude / 협업자가 막혔다고 새 라이브러리를 임의 추가하지 �
 | 대상 | 어디로 | 어떻게 | 무엇이 들어감 |
 | --- | --- | --- | --- |
 | **렌더러 (위젯 페이지)** | Vercel — `https://epl-s1.vercel.app/widget` | `vercel --prod` (수동) | `src/**`, `app/**` — 위젯이 loadURL 로 가져오는 모든 웹 코드 |
-| **Electron 셸 (설치본)** | GitHub Releases — `jungminna03/epl-s1` | 설치본 빌드 후 수동 업로드 | `electron/**` (main / preload / config) + `package.json` 버전 |
+| **Electron 셸 (설치본)** | GitHub Releases — `jungminna03/epl-s1` | `npm run release` (tag 푸시 → GitHub Actions 가 빌드/업로드) | `electron/**` (main / preload / config) + `package.json` 버전 |
 
 **git push 만으론 아무것도 배포되지 않는다.** 둘 다 명시적으로 올려야 사용자에게 닿는다.
 
@@ -113,7 +113,18 @@ Claude / 협업자가 막혔다고 새 라이브러리를 임의 추가하지 �
 
 ## Electron 새 설치본 배포 (필요 시)
 
-별도 워크플로/스크립트로 패키징한 `.exe` 를 GitHub Releases (`jungminna03/epl-s1`) 의 latest 태그에 업로드한다. 사용자 측 auto-updater 가 30분 주기로 폴링해서 받고, 다음 정각 리셋 사이클에서 `applyUpdateAndRestart` 가 적용한다. (자세한 패키징 명령은 별도 문서 또는 사용자에게 확인.)
+1. `package.json` 의 `version` 을 올린다 (예: `0.2.7` → `0.2.8`).
+2. 변경 사항 커밋 + `origin` 푸시.
+3. `npm run release` 실행 — `scripts/release.mjs` 가 `vX.Y.Z` 태그를 만들고 `github` remote 로 푸시 → `.github/workflows/release.yml` 이 Windows runner 에서 자동 빌드 + Release 생성/업로드.
+4. 진행 상황: https://github.com/jungminna03/epl-s1/actions
+
+배포 후 클라이언트 흐름 (자동, 사용자 액션 0):
+- `electron/config.ts` 의 `updateIntervalMs` (기본 30분) 주기로 electron-updater 가 `latest.yml` 폴링
+- 새 버전 발견 시 백그라운드 다운로드
+- 다음 정각 리셋 사이클에서 `useReadState` 훅이 `applyUpdateAndRestart` 호출 → 자동 재시작/적용
+- 보통 빌드 시간 포함 30~60분 안에 모든 PC 가 새 버전으로 전환됨
+
+같은 버전 태그 재실행이 필요하면 (빌드 실패 등): 로컬에서 `git tag -d vX.Y.Z` + 원격에서 `git push github :refs/tags/vX.Y.Z` 로 정리 후 다시 `npm run release`.
 
 # MCP 서버 협업 규칙
 
