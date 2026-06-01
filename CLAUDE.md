@@ -86,6 +86,35 @@ Claude / 협업자가 막혔다고 새 라이브러리를 임의 추가하지 �
 3. dev 모드는 이미 focusable 이라 no-op — 따로 분기 안 해도 됨
 4. 가능하면 native `<select>` 대신 커스텀 드롭다운 컴포넌트도 검토 (focusable 정책 안 건드려도 됨)
 
+# 배포 규칙
+
+이 프로젝트는 **이중 배포 구조** 다. 자동화 X — 둘 다 수동.
+
+| 대상 | 어디로 | 어떻게 | 무엇이 들어감 |
+| --- | --- | --- | --- |
+| **렌더러 (위젯 페이지)** | Vercel — `https://epl-s1.vercel.app/widget` | `vercel --prod` (수동) | `src/**`, `app/**` — 위젯이 loadURL 로 가져오는 모든 웹 코드 |
+| **Electron 셸 (설치본)** | GitHub Releases — `jungminna03/epl-s1` | 설치본 빌드 후 수동 업로드 | `electron/**` (main / preload / config) + `package.json` 버전 |
+
+**git push 만으론 아무것도 배포되지 않는다.** 둘 다 명시적으로 올려야 사용자에게 닿는다.
+
+## 무엇을 바꾸면 어디를 배포해야 하나
+
+- `src/**` 만 바꿨다 → **Vercel 만** 올리면 됨.
+- `electron/**` 또는 `package.json` 의 version 을 바꿨다 → **GitHub Releases 도** 필요. Vercel 은 electron 코드를 안 호스팅.
+- 양쪽이 같이 바뀌었다 (예: 새 IPC 추가 + 그걸 호출하는 렌더러 코드)
+  → **둘 다** 올려야 함. 그리고 **Electron 설치본 먼저** 올리는 게 안전하다. 이유: Vercel 만 먼저 올리면 구버전 preload 가 깔린 사용자는 새 API 가 없어서 기능이 죽는다. 반대로 Electron 만 먼저 올려도 렌더러는 구버전이라 새 API 를 호출하지 않으니 그냥 "기능 미도입" 상태로 안전하게 머문다.
+
+## Vercel 배포 절차
+
+1. master 브랜치 최신 상태인지 확인 (`git status`, `git log -1`)
+2. `npm run build` 로 로컬 빌드 통과 확인
+3. `vercel --prod` 실행 → `https://epl-s1.vercel.app` 에 alias 됨
+4. 위젯이 즉시 (수초 내) 새 코드로 동작. 사용자 재시작 불필요 (loadURL 캐시는 main 의 `clearCache()` 가 시작 시 비움).
+
+## Electron 새 설치본 배포 (필요 시)
+
+별도 워크플로/스크립트로 패키징한 `.exe` 를 GitHub Releases (`jungminna03/epl-s1`) 의 latest 태그에 업로드한다. 사용자 측 auto-updater 가 30분 주기로 폴링해서 받고, 다음 정각 리셋 사이클에서 `applyUpdateAndRestart` 가 적용한다. (자세한 패키징 명령은 별도 문서 또는 사용자에게 확인.)
+
 # MCP 서버 협업 규칙
 
 | 파일 | 용도 | git |
