@@ -261,8 +261,15 @@ function Dashboard({ onSignOut }: { onSignOut: () => void }) {
     onSignOut();
   }
 
+  const showAISummaryLoader =
+    submitting &&
+    !(editing && form.content.trim() === form.originalContent.trim());
+
   return (
     <main className="min-h-screen overflow-x-hidden">
+      <AnimatePresence>
+        {showAISummaryLoader && <AISummaryLoadingOverlay />}
+      </AnimatePresence>
       <header className="border-b border-white/5 bg-zinc-950/80 backdrop-blur">
         <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-4 lg:px-6 lg:py-5">
           <div>
@@ -378,6 +385,145 @@ function Dashboard({ onSignOut }: { onSignOut: () => void }) {
 /* -------------------------------------------------------------------------- */
 /*  Subcomponents                                                              */
 /* -------------------------------------------------------------------------- */
+
+function AISummaryLoadingOverlay() {
+  // 무작위해 보이지만 SSR/CSR 가 동일하게 그려지도록 고정 좌표 사용
+  const sparkles = [
+    { top: "18%", left: "22%", delay: 0, size: 6 },
+    { top: "28%", left: "78%", delay: 0.4, size: 4 },
+    { top: "62%", left: "14%", delay: 0.8, size: 5 },
+    { top: "72%", left: "82%", delay: 1.2, size: 7 },
+    { top: "44%", left: "10%", delay: 0.2, size: 3 },
+    { top: "52%", left: "90%", delay: 1.0, size: 4 },
+    { top: "12%", left: "52%", delay: 0.6, size: 5 },
+    { top: "84%", left: "48%", delay: 1.4, size: 4 },
+  ];
+
+  return (
+    <motion.div
+      key="ai-summary-loader"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.2 }}
+      className="fixed inset-0 z-[100] flex items-center justify-center"
+      style={{
+        background: "rgba(9, 11, 17, 0.78)",
+        backdropFilter: "blur(10px)",
+        WebkitBackdropFilter: "blur(10px)",
+      }}
+    >
+      {/* 배경의 반짝이는 별들 */}
+      <div className="pointer-events-none absolute inset-0">
+        {sparkles.map((s, i) => (
+          <motion.div
+            key={i}
+            className="absolute"
+            style={{
+              top: s.top,
+              left: s.left,
+              width: s.size,
+              height: s.size,
+            }}
+            animate={{
+              opacity: [0, 1, 0],
+              scale: [0.4, 1.2, 0.4],
+              rotate: [0, 180],
+            }}
+            transition={{
+              duration: 2.2,
+              repeat: Infinity,
+              delay: s.delay,
+              ease: "easeInOut",
+            }}
+          >
+            <svg viewBox="0 0 24 24" fill="none" className="h-full w-full">
+              <path
+                d="M12 0 L13.5 10.5 L24 12 L13.5 13.5 L12 24 L10.5 13.5 L0 12 L10.5 10.5 Z"
+                fill="url(#sparkleGrad)"
+              />
+              <defs>
+                <linearGradient id="sparkleGrad" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" stopColor="#a78bfa" />
+                  <stop offset="100%" stopColor="#22d3ee" />
+                </linearGradient>
+              </defs>
+            </svg>
+          </motion.div>
+        ))}
+      </div>
+
+      {/* 중앙 스피너 + 텍스트 */}
+      <motion.div
+        initial={{ scale: 0.9, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.95, opacity: 0 }}
+        transition={{ type: "spring", stiffness: 260, damping: 22 }}
+        className="relative flex flex-col items-center"
+      >
+        <div className="relative h-28 w-28">
+          {/* 바깥 회전 링 */}
+          <motion.div
+            className="absolute inset-0 rounded-full"
+            style={{
+              border: "2px solid transparent",
+              borderTopColor: "#a78bfa",
+              borderRightColor: "#22d3ee",
+            }}
+            animate={{ rotate: 360 }}
+            transition={{ duration: 1.4, repeat: Infinity, ease: "linear" }}
+          />
+          {/* 안쪽 역회전 링 */}
+          <motion.div
+            className="absolute rounded-full"
+            style={{
+              inset: 14,
+              border: "2px solid transparent",
+              borderBottomColor: "#c084fc",
+              borderLeftColor: "#60a5fa",
+            }}
+            animate={{ rotate: -360 }}
+            transition={{ duration: 1.0, repeat: Infinity, ease: "linear" }}
+          />
+          {/* 가운데 펄스하는 별 */}
+          <motion.div
+            className="absolute inset-0 flex items-center justify-center"
+            animate={{ scale: [1, 1.15, 1], rotate: [0, 12, 0] }}
+            transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
+          >
+            <svg viewBox="0 0 24 24" className="h-9 w-9" fill="none">
+              <path
+                d="M12 1 L14 9.5 L22.5 12 L14 14.5 L12 23 L10 14.5 L1.5 12 L10 9.5 Z"
+                fill="url(#centerStarGrad)"
+              />
+              <defs>
+                <linearGradient id="centerStarGrad" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" stopColor="#a78bfa" />
+                  <stop offset="100%" stopColor="#22d3ee" />
+                </linearGradient>
+              </defs>
+            </svg>
+          </motion.div>
+        </div>
+
+        <motion.p
+          className="mt-7 text-lg font-semibold"
+          style={{
+            background: "linear-gradient(90deg, #a78bfa, #22d3ee)",
+            WebkitBackgroundClip: "text",
+            WebkitTextFillColor: "transparent",
+            backgroundClip: "text",
+          }}
+          animate={{ opacity: [0.7, 1, 0.7] }}
+          transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut" }}
+        >
+          ✨ AI 요약 생성 중…
+        </motion.p>
+        <p className="mt-2 text-xs text-zinc-500">잠시만 기다려주세요</p>
+      </motion.div>
+    </motion.div>
+  );
+}
 
 function SectionHeader({
   title,
@@ -645,7 +791,9 @@ function NoticeForm({
           className="flex-1 rounded-xl bg-zinc-100 px-4 py-2.5 text-sm font-medium text-zinc-900 transition hover:bg-white disabled:opacity-60"
         >
           {submitting
-            ? "저장 중…"
+            ? (editing && form.content.trim() === form.originalContent.trim())
+              ? "저장 중…"
+              : "✨ AI 요약 생성 중…"
             : editing
               ? "변경사항 저장"
               : "공지 등록"}
