@@ -6,7 +6,11 @@ import {
   OLLAMA_TIMEOUT_MS,
   SUMMARY_HARD_CAP,
   TITLE_HARD_CAP,
+  isTitleRelevant,
 } from "@/lib/ai-summary";
+
+/** 제목이 본문과 안 맞으면 최대 이만큼 재시도. (초기 호출 1 + 재시도 N) */
+const MAX_ATTEMPTS = 3;
 
 /**
  * POST /api/summarize
@@ -56,48 +60,86 @@ export async function POST(req: Request) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), OLLAMA_TIMEOUT_MS);
 
+  // 제목 후보를 최대 MAX_ATTEMPTS 번 받아보고, 본문과 매칭되는 첫 후보를 채택.
+  // 매칭 실패가 누적되면 다음 시도에 "직전 후보는 본문과 무관했다" 는 교정 메시지를 추가.
+  let lastSummary: string | null = null;
+  const rejectedTitles: string[] = [];
+
   try {
-    const upstream = await fetch("https://ollama.com/api/chat", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model,
-        messages: [
-          { role: "system", content: META_SYSTEM_PROMPT },
-          { role: "user", content: `본문:\n${content}` },
-        ],
-        stream: false,
-        format: "json",
-      }),
-      signal: controller.signal,
-    });
+    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+      const messages: Array<{ role: string; content: string }> = [
+        { role: "system", content: META_SYSTEM_PROMPT },
+        { role: "user", content: `본문:\n${content}` },
+      ];
+      if (rejectedTitles.length > 0) {
+        messages.push({
+          role: "user",
+          content:
+            `이전 제목 후보 [${rejectedTitles.map((t) => `"${t}"`).join(", ")}] ` +
+            `는 본문과 무관하거나 일반적 인사말입니다. ` +
+            `본문의 핵심 키워드(대상/주제/시점/장소)를 반드시 포함해서 다시 만들어주세요.`,
+        });
+      }
 
-    if (!upstream.ok) {
-      const errText = await upstream.text().catch(() => "<unreadable>");
-      console.error(
-        `[summarize] Ollama ${upstream.status} (model=${model}):`,
-        errText.slice(0, 500),
+      const upstream = await fetch("https://ollama.com/api/chat", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model,
+          messages,
+          stream: false,
+          format: "json",
+        }),
+        signal: controller.signal,
+      });
+
+      if (!upstream.ok) {
+        const errText = await upstream.text().catch(() => "<unreadable>");
+        console.error(
+          `[summarize] Ollama ${upstream.status} (model=${model}, attempt=${attempt + 1}):`,
+          errText.slice(0, 500),
+        );
+        return NextResponse.json({ error: "upstream" }, { status: 502 });
+      }
+
+      const data = (await upstream.json()) as {
+        message?: { content?: unknown };
+      };
+      const text = data?.message?.content;
+      if (typeof text !== "string" || text.trim().length === 0) {
+        console.error(
+          `[summarize] Ollama OK but no content (model=${model}, attempt=${attempt + 1}):`,
+          JSON.stringify(data).slice(0, 500),
+        );
+        return NextResponse.json({ error: "upstream" }, { status: 502 });
+      }
+
+      const { title, summary } = parseMeta(text);
+      lastSummary = summary;
+
+      if (title && isTitleRelevant(title, content)) {
+        return NextResponse.json({ title, summary }, { status: 200 });
+      }
+
+      if (title) rejectedTitles.push(title);
+      console.warn(
+        `[summarize] title rejected (attempt=${attempt + 1}, model=${model}): "${title}"`,
       );
-      return NextResponse.json({ error: "upstream" }, { status: 502 });
     }
 
-    const data = (await upstream.json()) as {
-      message?: { content?: unknown };
-    };
-    const text = data?.message?.content;
-    if (typeof text !== "string" || text.trim().length === 0) {
-      console.error(
-        `[summarize] Ollama OK but no content (model=${model}):`,
-        JSON.stringify(data).slice(0, 500),
-      );
-      return NextResponse.json({ error: "upstream" }, { status: 502 });
-    }
-
-    const { title, summary } = parseMeta(text);
-    return NextResponse.json({ title, summary }, { status: 200 });
+    // 모든 시도가 매칭 실패 — title 은 null 로 돌려서 클라이언트가 fallback 쓰게 한다.
+    // summary 는 살릴 가치가 있으면 유지.
+    console.warn(
+      `[summarize] all ${MAX_ATTEMPTS} attempts failed validation, returning null title. ` +
+        `rejected=${JSON.stringify(rejectedTitles)}`,
+    );
+    return NextResponse.json(
+      { title: null, summary: lastSummary },
+      { status: 200 },
+    );
   } catch (err) {
     if (err instanceof Error && err.name === "AbortError") {
       return NextResponse.json({ error: "timeout" }, { status: 504 });

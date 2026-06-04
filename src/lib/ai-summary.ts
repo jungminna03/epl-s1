@@ -42,6 +42,57 @@ export interface AiMeta {
 }
 
 /**
+ * 모델이 본문과 무관한 인사말/일반어로 제목을 뽑는 사고를 거르기 위한 denylist.
+ */
+const TITLE_DENY_PATTERNS: RegExp[] = [
+  /^안녕하세요/,
+  /^안녕$/,
+  /^반갑습니다/,
+  /^제목\s*없음$/,
+  /^무제$/,
+  /^공지$/,
+  /^공지사항$/,
+  /^안내$/,
+  /^알림$/,
+  /^새\s*공지/,
+];
+
+/**
+ * 한글/영문/숫자만 살린 뒤 길이 2 이상 토큰만 추출. 본문/제목 비교용.
+ */
+function tokenize(s: string): Set<string> {
+  const tokens = s
+    .toLowerCase()
+    .split(/[^0-9a-z가-힣]+/u)
+    .filter((t) => t.length >= 2);
+  return new Set(tokens);
+}
+
+/**
+ * 생성된 제목이 본문과 매칭되는지 휴리스틱으로 검증.
+ *
+ * 통과 조건:
+ * 1) denylist (인사말/일반어) 에 안 걸리고
+ * 2) 제목 토큰 중 최소 1 개가 본문 토큰에 등장
+ *
+ * 너무 엄격하면 정상 제목까지 거르니까 단 하나의 토큰 overlap 만 요구.
+ */
+export function isTitleRelevant(title: string, content: string): boolean {
+  const trimmed = title.trim();
+  if (trimmed.length === 0) return false;
+  for (const re of TITLE_DENY_PATTERNS) {
+    if (re.test(trimmed)) return false;
+  }
+  const titleTokens = tokenize(trimmed);
+  if (titleTokens.size === 0) return false;
+  const contentTokens = tokenize(content);
+  for (const t of titleTokens) {
+    if (contentTokens.has(t)) return true;
+  }
+  return false;
+}
+
+/**
  * 본문에서 제목 fallback 을 만든다. AI 실패 시 사용.
  * 첫 줄을 가져와서 TITLE_HARD_CAP 자로 자른다.
  */
