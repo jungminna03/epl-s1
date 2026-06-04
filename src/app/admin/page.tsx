@@ -23,6 +23,13 @@ import {
   fallbackTitleFromContent,
   requestMeta,
 } from "@/lib/ai-summary";
+import {
+  NOTICE_TABS,
+  countByStatus,
+  filterByTab,
+  isNoticeTab,
+  type NoticeTab,
+} from "@/lib/notice-status";
 
 /**
  * /admin
@@ -180,6 +187,42 @@ function Dashboard({ onSignOut }: { onSignOut: () => void }) {
   const editing = form.id !== null;
   const notices: Notice[] = useMemo(() => data?.notices ?? [], [data]);
 
+  // ── 탭 (활성/예정/종료/전체) ────────────────────────────────────────────
+  const [activeTab, setActiveTab] = useState<NoticeTab>("active");
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const hash = window.location.hash.replace(/^#/, "");
+    if (isNoticeTab(hash)) {
+      setActiveTab(hash);
+    }
+    function onHashChange() {
+      const next = window.location.hash.replace(/^#/, "");
+      if (isNoticeTab(next)) setActiveTab(next);
+    }
+    window.addEventListener("hashchange", onHashChange);
+    return () => window.removeEventListener("hashchange", onHashChange);
+  }, []);
+
+  function handleTabChange(tab: NoticeTab) {
+    setActiveTab(tab);
+    if (typeof window !== "undefined") {
+      window.history.replaceState(null, "", `#${tab}`);
+    }
+  }
+
+  // 마운트 시점의 now 한 번만 잡아 일관 카운트/필터. InstantDB 데이터가
+  // 업데이트되면 useMemo 가 다시 돌면서 자연스럽게 보정된다.
+  const now = useMemo(() => Date.now(), [data]);
+  const tabCounts = useMemo(
+    () => countByStatus(notices, now),
+    [notices, now],
+  );
+  const filteredNotices = useMemo(
+    () => filterByTab(notices, activeTab, now),
+    [notices, activeTab, now],
+  );
+
   function startEdit(n: Notice) {
     setForm({
       id: n.id,
@@ -322,20 +365,24 @@ function Dashboard({ onSignOut }: { onSignOut: () => void }) {
         <div className="mx-auto w-full max-w-6xl grid-cols-[1fr_400px] gap-6 px-6 py-8 lg:grid">
           {/* List */}
           <section>
-            <SectionHeader
-              title="등록된 공지"
-              subtitle={`총 ${notices.length}건`}
-            />
+            <SectionHeader title="등록된 공지" />
+            <div className="mt-4">
+              <NoticeTabs
+                activeTab={activeTab}
+                counts={tabCounts}
+                onChange={handleTabChange}
+              />
+            </div>
             {isLoading ? (
               <p className="mt-4 text-sm text-zinc-500">불러오는 중…</p>
             ) : error ? (
               <p className="mt-4 text-sm text-red-400">{error.message}</p>
-            ) : notices.length === 0 ? (
-              <EmptyList />
+            ) : filteredNotices.length === 0 ? (
+              <EmptyTab tab={activeTab} />
             ) : (
               <ul className="mt-4 space-y-3">
                 <AnimatePresence initial={false}>
-                  {notices.map((n) => (
+                  {filteredNotices.map((n) => (
                     <NoticeRow
                       key={n.id}
                       notice={n}
@@ -376,9 +423,12 @@ function Dashboard({ onSignOut }: { onSignOut: () => void }) {
         <div>
           {mobileView === "list" ? (
             <MobileListView
-              notices={notices}
+              notices={filteredNotices}
               isLoading={isLoading}
               error={error}
+              activeTab={activeTab}
+              tabCounts={tabCounts}
+              onTabChange={handleTabChange}
               onEdit={startEdit}
               onDelete={handleDelete}
               onRegenerate={handleRegenerate}
@@ -541,6 +591,70 @@ function AISummaryLoadingOverlay() {
         <p className="mt-2 text-xs text-zinc-500">잠시만 기다려주세요</p>
       </motion.div>
     </motion.div>
+  );
+}
+
+const TAB_LABELS: Record<NoticeTab, string> = {
+  all: "전체",
+  active: "활성",
+  upcoming: "예정",
+  expired: "종료",
+};
+
+function NoticeTabs({
+  activeTab,
+  counts,
+  onChange,
+}: {
+  activeTab: NoticeTab;
+  counts: Record<NoticeTab, number>;
+  onChange: (tab: NoticeTab) => void;
+}) {
+  return (
+    <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+      {NOTICE_TABS.map((tab) => {
+        const isActive = tab === activeTab;
+        return (
+          <button
+            key={tab}
+            type="button"
+            onClick={() => onChange(tab)}
+            className={
+              "flex shrink-0 items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-medium transition " +
+              (isActive
+                ? "border-blue-400/70 bg-blue-500/90 text-white shadow-[0_0_0_1px_rgba(59,130,246,0.35)]"
+                : "border-white/10 bg-zinc-900/40 text-zinc-400 hover:border-white/25 hover:text-zinc-100")
+            }
+          >
+            <span>{TAB_LABELS[tab]}</span>
+            <span
+              className={
+                "rounded-full px-1.5 py-0.5 text-[10px] font-semibold " +
+                (isActive
+                  ? "bg-white/20 text-white"
+                  : "bg-white/5 text-zinc-500")
+              }
+            >
+              {counts[tab]}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function EmptyTab({ tab }: { tab: NoticeTab }) {
+  const messages: Record<NoticeTab, string> = {
+    all: "등록된 공지가 없습니다.",
+    active: "활성 공지가 없습니다.",
+    upcoming: "예정된 공지가 없습니다.",
+    expired: "종료된 공지가 없습니다.",
+  };
+  return (
+    <div className="mt-6 rounded-2xl border border-dashed border-white/10 bg-zinc-900/30 px-6 py-10 text-center">
+      <p className="text-sm text-zinc-400">{messages[tab]}</p>
+    </div>
   );
 }
 
@@ -729,14 +843,6 @@ function NoticeRow({
   );
 }
 
-function EmptyList() {
-  return (
-    <div className="mt-4 rounded-2xl border border-dashed border-white/10 px-6 py-12 text-center">
-      <p className="text-sm text-zinc-300">아직 등록된 공지가 없습니다.</p>
-    </div>
-  );
-}
-
 /* ─── Reusable Form Component ─── */
 
 function NoticeForm({
@@ -851,6 +957,9 @@ function MobileListView({
   notices,
   isLoading,
   error,
+  activeTab,
+  tabCounts,
+  onTabChange,
   onEdit,
   onDelete,
   onRegenerate,
@@ -859,6 +968,9 @@ function MobileListView({
   notices: Notice[];
   isLoading: boolean;
   error: { message: string } | null | undefined;
+  activeTab: NoticeTab;
+  tabCounts: Record<NoticeTab, number>;
+  onTabChange: (tab: NoticeTab) => void;
   onEdit: (n: Notice) => void;
   onDelete: (n: Notice) => void;
   onRegenerate: (n: Notice) => Promise<void>;
@@ -866,16 +978,20 @@ function MobileListView({
 }) {
   return (
     <div className="relative min-h-screen px-4 py-4">
-      <SectionHeader
-        title="등록된 공지"
-        subtitle={`총 ${notices.length}건`}
-      />
+      <SectionHeader title="등록된 공지" />
+      <div className="mt-3">
+        <NoticeTabs
+          activeTab={activeTab}
+          counts={tabCounts}
+          onChange={onTabChange}
+        />
+      </div>
       {isLoading ? (
         <p className="mt-4 text-sm text-zinc-500">불러오는 중…</p>
       ) : error ? (
         <p className="mt-4 text-sm text-red-400">{error.message}</p>
       ) : notices.length === 0 ? (
-        <EmptyList />
+        <EmptyTab tab={activeTab} />
       ) : (
         <ul className="mt-4 space-y-3 pb-24">
           <AnimatePresence initial={false}>
