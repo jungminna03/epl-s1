@@ -326,7 +326,7 @@ function Dashboard({ onSignOut }: { onSignOut: () => void }) {
     !(editing && form.content.trim() === form.originalContent.trim());
 
   return (
-    <main className="min-h-screen overflow-x-hidden">
+    <main className="min-h-screen overflow-x-clip">
       <AnimatePresence>
         {showAISummaryLoader && <AISummaryLoadingOverlay />}
       </AnimatePresence>
@@ -398,7 +398,7 @@ function Dashboard({ onSignOut }: { onSignOut: () => void }) {
           </section>
 
           {/* Form */}
-          <aside className="sticky top-6 self-start">
+          <aside className="sticky top-6 max-h-[calc(100vh-3rem)] self-start overflow-y-auto">
             <div className="rounded-2xl border border-white/5 bg-zinc-900/60 p-6 backdrop-blur">
               <SectionHeader
                 title={editing ? "공지 수정" : "새 공지 작성"}
