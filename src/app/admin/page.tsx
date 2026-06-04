@@ -30,6 +30,9 @@ import {
   isNoticeTab,
   type NoticeTab,
 } from "@/lib/notice-status";
+import { hasUnseenRelease } from "@/lib/release-notes";
+import ReleaseNotesDot from "@/components/release-notes/ReleaseNotesDot";
+import ReleaseNotesPanel from "@/components/release-notes/ReleaseNotesPanel";
 
 /**
  * /admin
@@ -171,6 +174,13 @@ function Dashboard({ onSignOut }: { onSignOut: () => void }) {
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [submitting, setSubmitting] = useState(false);
   const [mobileView, setMobileView] = useState<"list" | "form">("list");
+  const [releaseOpen, setReleaseOpen] = useState(false);
+  const [releaseUnseen, setReleaseUnseen] = useState(false);
+
+  // 마운트 시점에 한 번 — 마지막으로 본 버전 vs LATEST_VERSION 비교. SSR 안전.
+  useEffect(() => {
+    setReleaseUnseen(hasUnseenRelease());
+  }, []);
   const [layoutMode, setLayoutMode] = useState<"desktop" | "touch">(
     typeof window !== "undefined" ? (window.innerWidth >= 1280 ? "desktop" : "touch") : "touch"
   );
@@ -329,6 +339,18 @@ function Dashboard({ onSignOut }: { onSignOut: () => void }) {
     <main className="min-h-screen overflow-x-clip">
       <AnimatePresence>
         {showAISummaryLoader && <AISummaryLoadingOverlay />}
+      </AnimatePresence>
+      <ReleaseNotesDot
+        hasUnseen={releaseUnseen}
+        onClick={() => {
+          setReleaseOpen(true);
+          setReleaseUnseen(false);
+        }}
+      />
+      <AnimatePresence>
+        {releaseOpen && (
+          <ReleaseNotesPanel onClose={() => setReleaseOpen(false)} />
+        )}
       </AnimatePresence>
       <header className="border-b border-white/5 bg-zinc-950/80 backdrop-blur">
         <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-4 lg:px-6 lg:py-5">

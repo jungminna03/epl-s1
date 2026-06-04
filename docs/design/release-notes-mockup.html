@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<title>Release Notes — Visual Companion</title>
+<style>
+  :root {
+    --bg: #0a0e1a;
+    --panel: rgba(20, 28, 48, 0.85);
+    --panel-border: rgba(120, 160, 255, 0.18);
+    --accent: #7aa2ff;
+    --accent-glow: rgba(122, 162, 255, 0.35);
+    --text: #e8ecf5;
+    --text-dim: #8a93a8;
+    --add: #6ee7b7;
+    --fix: #fbbf24;
+    --update: #7aa2ff;
+    --refactor: #c4b5fd;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Pretendard', -apple-system, sans-serif;
+    background: #050813;
+    color: var(--text);
+    padding: 40px;
+    min-height: 100vh;
+  }
+  h1 { font-size: 20px; margin-bottom: 8px; color: var(--accent); }
+  .subtitle { color: var(--text-dim); font-size: 13px; margin-bottom: 32px; }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 32px;
+    max-width: 1600px;
+  }
+  .case h2 {
+    font-size: 14px;
+    color: var(--text-dim);
+    margin-bottom: 4px;
+    font-weight: 500;
+  }
+  .case .desc {
+    font-size: 12px;
+    color: var(--text-dim);
+    margin-bottom: 16px;
+    opacity: 0.7;
+  }
+
+  /* ── 위젯 프레임 (세로 사이니지 비율 모사) ── */
+  .widget {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 9 / 16;
+    background:
+      radial-gradient(ellipse at top, rgba(122,162,255,0.08), transparent 50%),
+      linear-gradient(180deg, #0a0e1a 0%, #050813 100%);
+    border-radius: 16px;
+    border: 1px solid rgba(255,255,255,0.04);
+    overflow: hidden;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+  }
+  .clock {
+    position: absolute; top: 18px; right: 20px;
+    font-size: 14px; color: var(--text-dim);
+    font-variant-numeric: tabular-nums;
+  }
+  .widget-version {
+    position: absolute; top: 18px; left: 20px;
+    font-size: 10px; color: var(--text-dim);
+    letter-spacing: 0.05em;
+  }
+  .notice-list {
+    position: absolute; inset: 60px 20px 60px 20px;
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .notice {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.05);
+    border-radius: 10px;
+    padding: 14px 16px;
+    font-size: 13px;
+    color: var(--text);
+  }
+  .notice .cat { font-size: 10px; color: var(--accent); margin-bottom: 4px; }
+  .notice .title { font-weight: 500; }
+
+  /* ── A. 토스트 배너 ── */
+  .toast {
+    position: absolute;
+    bottom: 20px; left: 20px; right: 20px;
+    background: linear-gradient(135deg, rgba(122,162,255,0.18), rgba(122,162,255,0.06));
+    border: 1px solid var(--accent-glow);
+    border-radius: 12px;
+    padding: 12px 14px;
+    backdrop-filter: blur(12px);
+    display: flex; align-items: center; gap: 12px;
+    box-shadow: 0 0 30px rgba(122,162,255,0.15);
+    animation: slideUp 0.6s ease-out;
+  }
+  @keyframes slideUp {
+    from { transform: translateY(20px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+  .toast .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 12px var(--accent);
+    flex-shrink: 0;
+    animation: pulse 2s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+  .toast .toast-text { flex: 1; min-width: 0; }
+  .toast .toast-title {
+    font-size: 12px; color: var(--text); font-weight: 600;
+    margin-bottom: 2px;
+  }
+  .toast .toast-sub {
+    font-size: 11px; color: var(--text-dim);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .toast .arrow { color: var(--accent); font-size: 14px; }
+
+  /* ── B. 풀 패널 ── */
+  .panel-overlay {
+    position: absolute; inset: 0;
+    background: rgba(5, 8, 19, 0.85);
+    backdrop-filter: blur(8px);
+    z-index: 10;
+    display: flex; flex-direction: column;
+    padding: 24px 20px;
+  }
+  .panel-header {
+    display: flex; justify-content: space-between; align-items: baseline;
+    margin-bottom: 6px;
+  }
+  .panel-title {
+    font-size: 18px; font-weight: 600; color: var(--text);
+  }
+  .panel-close {
+    color: var(--text-dim); font-size: 18px; cursor: pointer;
+  }
+  .panel-version {
+    font-size: 11px; color: var(--accent);
+    letter-spacing: 0.08em;
+    margin-bottom: 18px;
+  }
+  .changelog {
+    flex: 1; overflow-y: auto;
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .entry {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 10px 12px;
+    background: rgba(255,255,255,0.03);
+    border-radius: 8px;
+    border-left: 3px solid var(--accent);
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .entry.add { border-color: var(--add); }
+  .entry.fix { border-color: var(--fix); }
+  .entry.update { border-color: var(--update); }
+  .entry.refactor { border-color: var(--refactor); }
+  .tag {
+    font-size: 9px; font-weight: 700;
+    padding: 2px 6px; border-radius: 4px;
+    background: rgba(255,255,255,0.08);
+    flex-shrink: 0; letter-spacing: 0.05em;
+  }
+  .tag.add { color: var(--add); background: rgba(110,231,183,0.12); }
+  .tag.fix { color: var(--fix); background: rgba(251,191,36,0.12); }
+  .tag.update { color: var(--update); background: rgba(122,162,255,0.12); }
+  .tag.refactor { color: var(--refactor); background: rgba(196,181,253,0.12); }
+  .panel-footer {
+    margin-top: 14px;
+    display: flex; align-items: center; justify-content: space-between;
+    font-size: 11px; color: var(--text-dim);
+  }
+  .btn {
+    background: var(--accent);
+    color: #0a0e1a;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 16px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  /* ── C. 미니 인디케이터 ── */
+  .mini-indicator {
+    position: absolute;
+    top: 18px; left: 50%;
+    transform: translateX(-50%);
+    background: rgba(122,162,255,0.12);
+    border: 1px solid var(--accent-glow);
+    border-radius: 999px;
+    padding: 4px 12px;
+    font-size: 10px;
+    color: var(--accent);
+    display: flex; align-items: center; gap: 6px;
+    backdrop-filter: blur(8px);
+  }
+  .mini-indicator .pulse {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--accent);
+    animation: pulse 2s ease-in-out infinite;
+  }
+  .mini-indicator .ver { color: var(--text); font-weight: 600; }
+
+  .footnote {
+    margin-top: 16px;
+    padding: 12px;
+    background: rgba(255,255,255,0.02);
+    border-radius: 8px;
+    font-size: 11px;
+    color: var(--text-dim);
+    line-height: 1.6;
+  }
+  .footnote strong { color: var(--text); }
+  .footnote .pro { color: var(--add); }
+  .footnote .con { color: var(--fix); }
+</style>
+</head>
+<body>
+
+<h1>릴리즈 노트 — 표시 방식 비교</h1>
+<div class="subtitle">3가지 패턴을 위젯 실제 비율(9:16)로 모사. 클릭 인터랙션은 정적.</div>
+
+<div class="grid">
+
+  <!-- A. 토스트 배너 -->
+  <div class="case">
+    <h2>A. 토스트 배너 (추천)</h2>
+    <div class="desc">버전 바뀐 직후, 위젯 하단에 8~10초 노출. 무시하면 사라짐. 클릭 시 패널 오픈.</div>
+    <div class="widget">
+      <div class="widget-version">V.2026.6.5</div>
+      <div class="clock">14:32</div>
+      <div class="notice-list">
+        <div class="notice"><div class="cat">학사 · 2026.06.04</div><div class="title">하계 계절수업 수강신청 안내</div></div>
+        <div class="notice"><div class="cat">장학 · 2026.06.03</div><div class="title">2학기 국가장학금 1차 신청</div></div>
+        <div class="notice"><div class="cat">행사 · 2026.06.02</div><div class="title">EPL 오픈 세미나: AI 와 캠퍼스</div></div>
+        <div class="notice"><div class="cat">취업 · 2026.06.01</div><div class="title">하반기 공채 박람회 사전등록</div></div>
+      </div>
+      <div class="toast">
+        <div class="dot"></div>
+        <div class="toast-text">
+          <div class="toast-title">새 버전 0.2.12 적용됨</div>
+          <div class="toast-sub">AI 제목 매칭 + 자동 재시도 외 3건</div>
+        </div>
+        <div class="arrow">›</div>
+      </div>
+    </div>
+    <div class="footnote">
+      <strong>장단점</strong><br/>
+      <span class="pro">+ 방해 적음, 위젯 정체성 유지, 무시 가능</span><br/>
+      <span class="con">– 사용자가 못 볼 수도 있음 (다음 부팅 시 한번 더 보여주는 로직 필요)</span>
+    </div>
+  </div>
+
+  <!-- B. 풀 패널 -->
+  <div class="case">
+    <h2>B. 풀 패널 (배너 클릭 시)</h2>
+    <div class="desc">FortunePanel · CookiePanel 과 동일한 inset-0 오버레이. 커밋 태그를 그대로 시각화.</div>
+    <div class="widget">
+      <div class="widget-version">V.2026.6.5</div>
+      <div class="clock">14:32</div>
+      <div class="panel-overlay">
+        <div class="panel-header">
+          <div class="panel-title">업데이트 내역</div>
+          <div class="panel-close">✕</div>
+        </div>
+        <div class="panel-version">V.2026.6.5 · 0.2.12</div>
+        <div class="changelog">
+          <div class="entry add">
+            <div class="tag add">ADD</div>
+            <div>AI 제목·본문 매칭 검증 + 최대 3회 재시도</div>
+          </div>
+          <div class="entry update">
+            <div class="tag update">UPDATE</div>
+            <div>AI 가 본문에서 제목까지 자동 생성</div>
+          </div>
+          <div class="entry add">
+            <div class="tag add">ADD</div>
+            <div>관리자 공지 등록 AI 요약 풀스크린 로딩</div>
+          </div>
+          <div class="entry update">
+            <div class="tag update">UPDATE</div>
+            <div>모바일 상세에 포춘쿠키·오늘의 운세 추가</div>
+          </div>
+          <div class="entry fix">
+            <div class="tag fix">FIX</div>
+            <div>위젯 자동 업데이트 다운로드 오류</div>
+          </div>
+          <div class="entry refactor">
+            <div class="tag refactor">REFAC</div>
+            <div>위젯 읽음 상태 훅 분리</div>
+          </div>
+        </div>
+        <div class="panel-footer">
+          <span>이전 버전 보기</span>
+          <button class="btn">확인</button>
+        </div>
+      </div>
+    </div>
+    <div class="footnote">
+      <strong>구현 노트</strong><br/>
+      • 소스: <strong>CHANGELOG.md</strong> 빌드 동봉 또는 GitHub Releases API<br/>
+      • 커밋 태그 그대로 컬러 매핑 ([ADD]=green, [FIX]=amber, [UPDATE]=blue, [REFACTOR]=purple)<br/>
+      • FortunePanel 처럼 absolute inset-0 z-20 + framer-motion
+    </div>
+  </div>
+
+  <!-- C. 미니 인디케이터 -->
+  <div class="case">
+    <h2>C. 미니 인디케이터 (소극)</h2>
+    <div class="desc">상단에 작은 pill 만 띄움. 새 버전 있다는 사실만 알림. 클릭 시 패널 오픈.</div>
+    <div class="widget">
+      <div class="widget-version">V.2026.6.5</div>
+      <div class="clock">14:32</div>
+      <div class="mini-indicator">
+        <div class="pulse"></div>
+        <span>업데이트됨 · </span><span class="ver">0.2.12</span>
+      </div>
+      <div class="notice-list" style="top: 70px;">
+        <div class="notice"><div class="cat">학사 · 2026.06.04</div><div class="title">하계 계절수업 수강신청 안내</div></div>
+        <div class="notice"><div class="cat">장학 · 2026.06.03</div><div class="title">2학기 국가장학금 1차 신청</div></div>
+        <div class="notice"><div class="cat">행사 · 2026.06.02</div><div class="title">EPL 오픈 세미나: AI 와 캠퍼스</div></div>
+        <div class="notice"><div class="cat">취업 · 2026.06.01</div><div class="title">하반기 공채 박람회 사전등록</div></div>
+      </div>
+    </div>
+    <div class="footnote">
+      <strong>장단점</strong><br/>
+      <span class="pro">+ 가장 비침습적, 사라지지 않고 계속 표시 가능</span><br/>
+      <span class="con">– 카피가 약해서 클릭 유도 부족, 변경 내용을 짐작 못함</span>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>
