@@ -20,7 +20,8 @@ import {
 import {
   MIN_CONTENT_LENGTH,
   SUMMARY_HARD_CAP,
-  requestSummary,
+  fallbackTitleFromContent,
+  requestMeta,
 } from "@/lib/ai-summary";
 
 /**
@@ -130,27 +131,28 @@ function msToDate(ms: number): string {
 
 interface FormState {
   id: string | null; // null 이면 새 공지
-  title: string;
   content: string;
   category: string; // 쉼표 구분 다중 카테고리 (e.g. "1학년,3학년")
   link: string;
   startDate: string; // "YYYY-MM-DD"
   endDate: string;   // "" means 무기한
-  /** edit 모드 진입 시점의 content. 저장 시 비교해서 변경 없으면 요약 재사용. 새 공지는 빈 문자열. */
+  /** edit 모드 진입 시점의 content. 저장 시 비교해서 변경 없으면 AI 호출 생략. 새 공지는 빈 문자열. */
   originalContent: string;
-  /** edit 모드 진입 시점의 summary. content 가 그대로면 이 값을 그대로 transact 에 포함. */
+  /** edit 모드 진입 시점의 title. content 가 그대로면 그대로 transact 에 재사용. */
+  originalTitle: string;
+  /** edit 모드 진입 시점의 summary. content 가 그대로면 그대로 transact 에 재사용. */
   originalSummary: string | null;
 }
 
 const EMPTY_FORM: FormState = {
   id: null,
-  title: "",
   content: "",
   category: "",
   link: "",
   startDate: new Date().toISOString().slice(0, 10),
   endDate: "",
   originalContent: "",
+  originalTitle: "",
   originalSummary: null,
 };
 
@@ -181,13 +183,13 @@ function Dashboard({ onSignOut }: { onSignOut: () => void }) {
   function startEdit(n: Notice) {
     setForm({
       id: n.id,
-      title: n.title,
       content: n.content,
       category: n.category ?? "",
       link: n.link ?? "",
       startDate: n.startDate ? msToDate(n.startDate) : msToDate(n.createdAt),
       endDate: n.endDate ? msToDate(n.endDate) : "",
       originalContent: n.content,
+      originalTitle: n.title,
       originalSummary: (n as Notice & { summary?: string | null }).summary ?? null,
     });
     setMobileView("form");
@@ -199,46 +201,50 @@ function Dashboard({ onSignOut }: { onSignOut: () => void }) {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const trimmedTitle = form.title.trim();
     const trimmedContent = form.content.trim();
-    if (!trimmedTitle || !trimmedContent) {
+    if (!trimmedContent) {
       return;
     }
     setSubmitting(true);
     try {
-      // 본문이 그대로면 기존 summary 재사용 — 토큰 낭비 방지.
+      // 본문이 그대로면 기존 title/summary 재사용 — 토큰 낭비 방지.
       const contentUnchanged =
         editing && trimmedContent === form.originalContent.trim();
+
+      let title: string;
       let summary: string | null;
       if (contentUnchanged) {
+        title = form.originalTitle || fallbackTitleFromContent(trimmedContent);
         summary = form.originalSummary;
       } else {
-        summary = await requestSummary(trimmedTitle, trimmedContent);
+        const meta = await requestMeta(trimmedContent);
+        title = meta.title ?? fallbackTitleFromContent(trimmedContent);
+        summary = meta.summary;
       }
 
       if (editing && form.id) {
         await db.transact(
           db.tx.notices[form.id].update({
-            title: trimmedTitle,
+            title,
             content: trimmedContent,
             category: form.category || "",
             link: form.link.trim() || null,
             startDate: dateToMs(form.startDate),
             endDate: form.endDate ? dateToMs(form.endDate) : null,
-            summary: summary,
+            summary,
           }),
         );
       } else {
         await db.transact(
           db.tx.notices[id()].update({
-            title: trimmedTitle,
+            title,
             content: trimmedContent,
             category: form.category || "",
             link: form.link.trim() || null,
             createdAt: Date.now(),
             startDate: dateToMs(form.startDate),
             endDate: form.endDate ? dateToMs(form.endDate) : null,
-            summary: summary,
+            summary,
           }),
         );
       }
@@ -247,6 +253,17 @@ function Dashboard({ onSignOut }: { onSignOut: () => void }) {
     } finally {
       setSubmitting(false);
     }
+  }
+
+  async function handleRegenerate(n: Notice) {
+    const meta = await requestMeta(n.content);
+    const title = meta.title ?? fallbackTitleFromContent(n.content);
+    await db.transact(
+      db.tx.notices[n.id].update({
+        title,
+        summary: meta.summary,
+      }),
+    );
   }
 
   async function handleDelete(n: Notice) {
@@ -325,6 +342,7 @@ function Dashboard({ onSignOut }: { onSignOut: () => void }) {
                       active={form.id === n.id}
                       onEdit={() => startEdit(n)}
                       onDelete={() => handleDelete(n)}
+                      onRegenerate={() => handleRegenerate(n)}
                     />
                   ))}
                 </AnimatePresence>
@@ -363,6 +381,7 @@ function Dashboard({ onSignOut }: { onSignOut: () => void }) {
               error={error}
               onEdit={startEdit}
               onDelete={handleDelete}
+              onRegenerate={handleRegenerate}
               onCreate={() => { reset(); setMobileView("form"); }}
             />
           ) : (
@@ -608,15 +627,28 @@ function NoticeRow({
   active,
   onEdit,
   onDelete,
+  onRegenerate,
 }: {
   notice: Notice;
   active: boolean;
   onEdit: () => void;
   onDelete: () => void;
+  onRegenerate: () => Promise<void>;
 }) {
   const cats = parseCategories(notice.category);
   const s = cats.length > 0 ? CATEGORY_STYLES[cats[0]] : DEFAULT_STYLE;
   const period = getEffectivePeriod(notice);
+  const [regenerating, setRegenerating] = useState(false);
+
+  async function handleRegenClick() {
+    if (regenerating) return;
+    setRegenerating(true);
+    try {
+      await onRegenerate();
+    } finally {
+      setRegenerating(false);
+    }
+  }
 
   return (
     <motion.li
@@ -672,6 +704,14 @@ function NoticeRow({
         </div>
         <div className="flex shrink-0 flex-row gap-1.5 lg:flex-col">
           <button
+            onClick={handleRegenClick}
+            disabled={regenerating}
+            title="AI 제목·요약 재생성"
+            className="rounded-md border border-cyan-700/40 bg-cyan-500/5 px-3 py-2 text-xs text-cyan-300 transition hover:border-cyan-500/80 hover:text-cyan-200 disabled:opacity-60 lg:px-2.5 lg:py-1 lg:text-[11px]"
+          >
+            {regenerating ? "…" : "🔄"}
+          </button>
+          <button
             onClick={onEdit}
             className="rounded-md border border-white/10 px-3 py-2 text-xs text-zinc-300 hover:border-white/30 hover:text-white lg:px-2.5 lg:py-1 lg:text-[11px]"
           >
@@ -725,24 +765,17 @@ function NoticeForm({
         />
       </Field>
 
-      <Field label="제목">
-        <input
-          type="text"
-          value={form.title}
-          onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-          placeholder="예: 5/13 데이터구조 휴강 안내"
-          className="w-full rounded-xl border border-white/10 bg-zinc-950 px-3 py-2.5 text-sm text-zinc-100 outline-none transition focus:border-zinc-500"
-        />
-      </Field>
-
       <Field label="내용">
         <textarea
           value={form.content}
           onChange={(e) => setForm((f) => ({ ...f, content: e.target.value }))}
           rows={6}
-          placeholder="공지 내용을 입력하세요."
+          placeholder="공지 내용을 입력하세요. 제목은 AI 가 자동 생성합니다."
           className="w-full resize-y rounded-xl border border-white/10 bg-zinc-950 px-3 py-2.5 text-sm leading-relaxed text-zinc-100 outline-none transition focus:border-zinc-500"
         />
+        <p className="mt-1.5 text-[11px] text-cyan-300/70">
+          ✨ 제목은 AI 가 본문을 보고 자동으로 만듭니다. 결과가 마음에 안 들면 목록에서 🔄 버튼으로 재생성하세요.
+        </p>
       </Field>
 
       <Field label="링크 (선택)">
@@ -793,7 +826,7 @@ function NoticeForm({
           {submitting
             ? (editing && form.content.trim() === form.originalContent.trim())
               ? "저장 중…"
-              : "✨ AI 요약 생성 중…"
+              : "✨ AI 제목·요약 생성 중…"
             : editing
               ? "변경사항 저장"
               : "공지 등록"}
@@ -820,6 +853,7 @@ function MobileListView({
   error,
   onEdit,
   onDelete,
+  onRegenerate,
   onCreate,
 }: {
   notices: Notice[];
@@ -827,6 +861,7 @@ function MobileListView({
   error: { message: string } | null | undefined;
   onEdit: (n: Notice) => void;
   onDelete: (n: Notice) => void;
+  onRegenerate: (n: Notice) => Promise<void>;
   onCreate: () => void;
 }) {
   return (
@@ -851,6 +886,7 @@ function MobileListView({
                 active={false}
                 onEdit={() => onEdit(n)}
                 onDelete={() => onDelete(n)}
+                onRegenerate={() => onRegenerate(n)}
               />
             ))}
           </AnimatePresence>
@@ -957,9 +993,12 @@ function BackfillSummariesButton({ notices }: { notices: Notice[] }) {
     setRunning(true);
     setProgress({ done: 0, failed: 0 });
     for (const n of pending) {
-      const summary = await requestSummary(n.title, n.content);
+      const meta = await requestMeta(n.content);
+      const title = meta.title ?? fallbackTitleFromContent(n.content);
       try {
-        await db.transact(db.tx.notices[n.id].update({ summary }));
+        await db.transact(
+          db.tx.notices[n.id].update({ title, summary: meta.summary }),
+        );
         setProgress((p) => ({ ...p, done: p.done + 1 }));
       } catch {
         setProgress((p) => ({ ...p, failed: p.failed + 1 }));

@@ -1,48 +1,75 @@
 /**
- * AI 요약 관련 상수 / 클라이언트 헬퍼.
- * - 서버 사이드(API Route) 는 SUMMARY_SYSTEM_PROMPT 만 import.
- * - 클라이언트(admin) 는 requestSummary 만 import.
+ * AI 메타(제목 + 요약) 생성 관련 상수 / 클라이언트 헬퍼.
+ * - 서버 사이드(API Route) 는 META_SYSTEM_PROMPT 만 import.
+ * - 클라이언트(admin) 는 requestMeta 만 import.
  */
 
-export const SUMMARY_SYSTEM_PROMPT = `당신은 학내 공지 요약 도우미입니다.
-주어진 공지를 학생이 빠르게 파악할 수 있도록 한국어로 요약하세요.
+export const META_SYSTEM_PROMPT = `당신은 학내 공지 메타데이터 생성기입니다.
+주어진 본문에서 "제목" 과 "요약" 을 만들어 JSON 으로 반환하세요.
 
-규칙:
-- 1~2문장, 총 60자 이내 (공백 포함, 절대 초과 금지)
-- 가장 중요한 정보(날짜·장소·대상·제출처 중 1~2개) 우선 — 60자에 안 들어가면 덜 중요한 건 과감히 생략
+[제목 규칙]
+- 한국어 명사형 헤드라인, 12~22자 (공백 포함)
+- 본문 핵심 키워드 우선 (대상/주제/시점 중 가장 중요한 1~2개)
+- "안내", "공지", "알림" 같은 군더더기 금지
 - 본문에 없는 정보를 만들어내지 말 것
-- "요약하면", "이 공지는" 같은 메타 표현 금지
-- 평서체로 작성
 
-출력은 요약문만. 다른 텍스트 없이.`;
+[요약 규칙]
+- 1~2문장, 총 60자 이내 (공백 포함, 절대 초과 금지)
+- 가장 중요한 정보(날짜·장소·대상·제출처 중 1~2개) 우선 — 60자에 안 들어가면 덜 중요한 건 생략
+- "요약하면", "이 공지는" 같은 메타 표현 금지
+- 평서체
+
+[출력]
+다른 텍스트 절대 없이, 이 형식의 JSON 한 줄만:
+{"title":"...","summary":"..."}`;
 
 /** 호출 자체를 건너뛰는 본문 길이 임계값 (이하면 호출 안 함). */
 export const MIN_CONTENT_LENGTH = 30;
 /** 본문이 이 길이를 넘으면 앞부분만 잘라서 보냄 (토큰 한도 보호). */
 export const MAX_CONTENT_LENGTH = 8000;
 /** Ollama 호출 타임아웃 (ms). */
-export const OLLAMA_TIMEOUT_MS = 10_000;
-/** 요약 결과 최대 길이. 모델이 프롬프트 60자 제약을 어겼을 때 안전망. 초과분은 잘리고 "…" 가 붙는다. */
+export const OLLAMA_TIMEOUT_MS = 15_000;
+/** 요약 결과 최대 길이. 모델이 프롬프트 60자 제약을 어겼을 때 안전망. */
 export const SUMMARY_HARD_CAP = 80;
+/** 제목 결과 최대 길이. 모델이 너무 길게 뽑은 경우 안전망. */
+export const TITLE_HARD_CAP = 30;
+
+export interface AiMeta {
+  /** AI 가 뽑은 제목. 실패 시 null → 호출자가 본문에서 fallback 생성. */
+  title: string | null;
+  /** AI 가 뽑은 요약. 본문이 너무 짧거나 실패 시 null. */
+  summary: string | null;
+}
+
+/**
+ * 본문에서 제목 fallback 을 만든다. AI 실패 시 사용.
+ * 첫 줄을 가져와서 TITLE_HARD_CAP 자로 자른다.
+ */
+export function fallbackTitleFromContent(content: string): string {
+  const firstLine = content.trim().split(/\r?\n/)[0].trim();
+  if (firstLine.length === 0) return "제목 없음";
+  if (firstLine.length <= TITLE_HARD_CAP) return firstLine;
+  return `${firstLine.slice(0, TITLE_HARD_CAP - 1)}…`;
+}
 
 /**
  * /api/summarize 호출. admin 클라이언트가 사용.
- * 실패해도 throw 하지 않고 null 반환 — admin 저장 흐름이 막히지 않도록.
+ * 실패해도 throw 하지 않고 { title:null, summary:null } 반환 — 저장 흐름 안 막힘.
  */
-export async function requestSummary(
-  title: string,
-  content: string,
-): Promise<string | null> {
+export async function requestMeta(content: string): Promise<AiMeta> {
   try {
     const res = await fetch("/api/summarize", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title, content }),
+      body: JSON.stringify({ content }),
     });
-    if (!res.ok) return null;
-    const json = (await res.json()) as { summary: string | null };
-    return json.summary ?? null;
+    if (!res.ok) return { title: null, summary: null };
+    const json = (await res.json()) as Partial<AiMeta>;
+    return {
+      title: typeof json.title === "string" && json.title.trim().length > 0 ? json.title : null,
+      summary: typeof json.summary === "string" && json.summary.trim().length > 0 ? json.summary : null,
+    };
   } catch {
-    return null;
+    return { title: null, summary: null };
   }
 }

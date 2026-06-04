@@ -40,7 +40,7 @@ import CookiePanel from "@/components/cookie/CookiePanel";
  * 위젯이 사용자에게 의미있게 변할 때 같은 달 안에서 N 을 증가시키고,
  * 달이 바뀌면 N 을 1 로 리셋. 사람이 직접 갱신한다.
  */
-const WIDGET_VERSION = "V.2026.6.4";
+const WIDGET_VERSION = "V.2026.6.5";
 
 const CLOCK_INTERVAL_MS = 30_000;
 const PAGE_SIZE = 4;
@@ -296,30 +296,9 @@ style={{
           </span>
           <UnreadBadge count={unreadCount} />
         </span>
-        <TimeDisplay />
       </div>
     </header>
   );
-}
-
-function TimeDisplay() {
-  const [time, setTime] = useState(() => formatTime(new Date()));
-  useEffect(() => {
-    const id = setInterval(() => setTime(formatTime(new Date())), 1000);
-    return () => clearInterval(id);
-  }, []);
-  return (
-    <span
-      className="font-extrabold text-white leading-none"
-      style={{ fontSize: "3.5vh" }}
-    >
-      {time}
-    </span>
-  );
-}
-
-function formatTime(d: Date) {
-  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
 function HeaderControl() {
@@ -751,8 +730,12 @@ function NoticeDetailOverlay({
   const [fortuneView, setFortuneView] = useState(false);
   const [cookieView, setCookieView] = useState(false);
   const [locked, setLocked] = useState(false);
+  const [localAdded, setLocalAdded] = useState(0);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
+
+  const dbCount = getCheckCount(notice);
+  const count = dbCount + localAdded;
 
   useEffect(() => {
     return () => {
@@ -763,8 +746,8 @@ function NoticeDetailOverlay({
   function handleCheck() {
     if (locked) return;
     setLocked(true);
+    setLocalAdded((a) => a + 1);
 
-    const dbCount = getCheckCount(notice);
     db.transact(
       db.tx.notices[notice.id].update({ checkCount: dbCount + 1 }),
     );
@@ -989,7 +972,10 @@ function NoticeDetailOverlay({
                 className="font-bold text-white"
                 style={{ fontSize: "4vh", lineHeight: 1 }}
               >
-                확인했어요
+                확인했어요{" "}
+                <span className="text-purple-300" style={{ fontSize: "3.4vh" }}>
+                  {count > 0 ? count : ""}
+                </span>
               </span>
             </button>
           </>
