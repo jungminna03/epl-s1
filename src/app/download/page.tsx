@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 
 // 위젯 다운로드 랜딩 페이지 — GitHub Desktop 다운로드 페이지 콘셉트.
 // 왼쪽 카피 + 다운로드 버튼, 오른쪽엔 실제 /widget 라이브 iframe 미리보기.
@@ -78,12 +77,6 @@ export default async function DownloadPage() {
           <p className="mt-3 text-sm text-slate-500">
             {version ? `v${version} · ` : ""}Windows 10/11
           </p>
-          <Link
-            href="/"
-            className="mt-10 text-sm text-slate-500 transition hover:text-slate-300"
-          >
-            ← 메인으로
-          </Link>
         </div>
 
         {/* ─── 오른쪽: 라이브 위젯 미리보기 ─── */}

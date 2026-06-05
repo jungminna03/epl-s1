@@ -28,12 +28,6 @@ export default function Home() {
           관리자 로그인
         </Link>
       </div>
-      <Link
-        href="/download"
-        className="-mt-3 text-sm text-cyan-300/80 underline underline-offset-4 transition hover:text-cyan-200"
-      >
-        🖥️ 데스크톱 위젯도 있어요 →
-      </Link>
     </main>
   );
 }
