@@ -40,7 +40,7 @@ import CookiePanel from "@/components/cookie/CookiePanel";
  * 위젯이 사용자에게 의미있게 변할 때 같은 달 안에서 N 을 증가시키고,
  * 달이 바뀌면 N 을 1 로 리셋. 사람이 직접 갱신한다.
  */
-const WIDGET_VERSION = "V.2026.6.6";
+const WIDGET_VERSION = "V.2026.6.7";
 
 const CLOCK_INTERVAL_MS = 30_000;
 const PAGE_SIZE = 4;
@@ -357,13 +357,41 @@ style={{
   );
 }
 
+/** ✕ 클릭 후 재클릭을 막는 시간. 셸의 SetWindowPos 발효를 기다리는 여유분. */
+const SEND_TO_BACK_COOLDOWN_MS = 1500;
+
 function HeaderControl() {
+  const [pending, setPending] = useState(false);
+  const cooldownTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(
+    () => () => {
+      if (cooldownTimer.current) clearTimeout(cooldownTimer.current);
+    },
+    [],
+  );
+
+  const handleClick = useCallback(() => {
+    if (pending) return; // 발효 대기 중 중복 클릭 무시
+    setPending(true);
+    sendToBack();
+    cooldownTimer.current = setTimeout(
+      () => setPending(false),
+      SEND_TO_BACK_COOLDOWN_MS,
+    );
+  }, [pending]);
+
   return (
     <button
       type="button"
-      onClick={sendToBack}
-      className="leading-none text-slate-400 transition-colors hover:text-white"
-      style={{ fontSize: "2.8vh", padding: "0.4vh 0.8vh" }}
+      onClick={handleClick}
+      className="leading-none text-slate-400 transition-all hover:text-white active:scale-75"
+      style={{
+        fontSize: "2.8vh",
+        padding: "0.4vh 0.8vh",
+        // 누른 직후 "접수됐다"는 시각 피드백 — 흐려졌다가 쿨다운 후 원복
+        opacity: pending ? 0.35 : 1,
+      }}
       aria-label="맨 뒤로 보내기"
       title="맨 뒤로 보내기 (다음 정각 리셋 때 다시 맨 앞으로)"
     >

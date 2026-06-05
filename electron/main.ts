@@ -78,6 +78,8 @@ function registerAutoLaunch() {
 
 void app.whenReady().then(async () => {
   registerAutoLaunch();
+  // ✕(맨 뒤로) 클릭이 즉시 발효되도록 z-order 워커를 미리 데워 둔다.
+  startZOrderWorker();
 
   const config = await loadBootstrapConfig(APP_CONFIG.bootstrapUrl, APP_CONFIG.isDev);
   activeConfig = config;
@@ -113,6 +115,13 @@ app.on("window-all-closed", () => {
 
 app.on("before-quit", () => {
   tray?.destroy();
+  // stdin 을 닫으면 워커 루프(ReadLine → $null)가 스스로 종료한다.
+  try {
+    zOrderWorker?.stdin?.end();
+  } catch {
+    // 이미 죽어 있으면 무시
+  }
+  zOrderWorker = null;
 });
 
 /* ─── Network Failure 대응: 재시도 + 에러 페이지 ─── */
@@ -221,21 +230,86 @@ p { font-size:12px; opacity:0.7; line-height:1.6; }
  * Windows 한정: SetWindowPos(HWND_BOTTOM, ...) 로 위젯 창을 모든 다른 창 뒤로
  * 보낸다. Electron BrowserWindow API 에는 "맨 뒤로" 가 없어서 PowerShell 로
  * user32!SetWindowPos 를 직접 호출한다.
+ *
+ * 기존엔 클릭마다 PowerShell 을 새로 띄우고 Add-Type 으로 C# 을 즉석
+ * 컴파일했는데, 그 기동+컴파일이 수백 ms ~ 수 초 걸려 "✕ 눌러도 한참 뒤에
+ * 사라지는" 체감 버그가 됐다. 그래서 앱 시작 시 워커 PowerShell 을 1개
+ * 상주시켜 컴파일 비용을 선불로 내고, 클릭 시엔 stdin 으로 HWND 만 넘겨
+ * 즉시 SetWindowPos 를 호출한다. 워커가 죽어 있으면 기존 1회성 exec 폴백.
  */
+
+// HWND_BOTTOM = 1, SWP_NOSIZE|SWP_NOMOVE|SWP_NOACTIVATE = 0x0013
+const SET_WINDOW_POS_CS =
+  'using System; using System.Runtime.InteropServices; public class W { [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr h, IntPtr a, int x, int y, int c, int d, uint f); }';
+
+let zOrderWorker: ReturnType<typeof spawn> | null = null;
+let zOrderWorkerRestarts = 0;
+const Z_ORDER_WORKER_MAX_RESTARTS = 3;
+
+/**
+ * 상주 z-order 워커를 기동한다. stdin 한 줄 = HWND(10진수) 하나.
+ * 줄을 받을 때마다 SetWindowPos(HWND_BOTTOM) 호출. stdin 이 닫히면 종료.
+ */
+function startZOrderWorker() {
+  if (process.platform !== "win32") return;
+  const script =
+    `$ErrorActionPreference = 'SilentlyContinue'; ` +
+    `Add-Type -TypeDefinition '${SET_WINDOW_POS_CS}'; ` +
+    `while ($true) { $line = [Console]::In.ReadLine(); if ($null -eq $line) { break }; ` +
+    `$h = 0L; if ([long]::TryParse($line, [ref]$h)) { [W]::SetWindowPos([IntPtr]$h, [IntPtr]1, 0, 0, 0, 0, 0x13) | Out-Null } }`;
+  const encoded = Buffer.from(script, "utf16le").toString("base64");
+  try {
+    const child = spawn("powershell", ["-NoProfile", "-EncodedCommand", encoded], {
+      stdio: ["pipe", "ignore", "ignore"],
+      windowsHide: true,
+    });
+    child.once("error", (err) => {
+      log.warn(`[main] z-order 워커 spawn 실패: ${err}`);
+      zOrderWorker = null;
+    });
+    child.once("exit", (code) => {
+      zOrderWorker = null;
+      if (code !== 0 && zOrderWorkerRestarts < Z_ORDER_WORKER_MAX_RESTARTS) {
+        zOrderWorkerRestarts += 1;
+        log.warn(`[main] z-order 워커 비정상 종료(code=${code}) — 재기동 ${zOrderWorkerRestarts}회차`);
+        startZOrderWorker();
+      }
+    });
+    zOrderWorker = child;
+    log.info("[main] z-order 워커 기동");
+  } catch (err) {
+    log.warn(`[main] z-order 워커 기동 예외: ${err}`);
+    zOrderWorker = null;
+  }
+}
+
+function getHwnd(win: BrowserWindow): string {
+  const handle = win.getNativeWindowHandle();
+  return handle.length >= 8
+    ? handle.readBigInt64LE(0).toString()
+    : handle.readInt32LE(0).toString();
+}
+
 function sendWindowToBack(win: BrowserWindow) {
   win.setAlwaysOnTop(false);
   win.blur();
   if (process.platform !== "win32") return;
 
-  const handle = win.getNativeWindowHandle();
-  const hwnd =
-    handle.length >= 8
-      ? handle.readBigInt64LE(0).toString()
-      : handle.readInt32LE(0).toString();
+  const hwnd = getHwnd(win);
 
-  // HWND_BOTTOM = 1, SWP_NOSIZE|SWP_NOMOVE|SWP_NOACTIVATE = 0x0013
+  // 빠른 경로: 상주 워커에 HWND 만 흘려보냄 (수 ms 내 발효)
+  if (zOrderWorker?.stdin?.writable) {
+    try {
+      zOrderWorker.stdin.write(`${hwnd}\n`);
+      return;
+    } catch (err) {
+      log.warn(`[main] z-order 워커 write 실패 — exec 폴백: ${err}`);
+    }
+  }
+
+  // 폴백: 1회성 PowerShell (느리지만 워커 없이도 동작)
   const script =
-    `Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public class W { [DllImport(\"user32.dll\")] public static extern bool SetWindowPos(IntPtr h, IntPtr a, int x, int y, int c, int d, uint f); }'; ` +
+    `Add-Type -TypeDefinition '${SET_WINDOW_POS_CS}'; ` +
     `[W]::SetWindowPos([IntPtr]${hwnd}, [IntPtr]1, 0, 0, 0, 0, 0x13) | Out-Null`;
   const encoded = Buffer.from(script, "utf16le").toString("base64");
   exec(`powershell -NoProfile -EncodedCommand ${encoded}`, (err) => {
