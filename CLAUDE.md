@@ -113,7 +113,7 @@ Claude / 협업자가 막혔다고 새 라이브러리를 임의 추가하지 �
 
 ## Electron 새 설치본 배포 (필요 시)
 
-1. `package.json` 의 `version` 을 올린다 (예: `0.2.7` → `0.2.8`).
+1. `package.json` 의 `version` 을 올린다 (예: `1.0.0` → `1.0.1`). 셸 설치본은 `1.0.0` 부터 정식 릴리즈 — `1.0.X` semver 로 관리한다.
 2. 변경 사항 커밋 + `origin` 푸시.
 3. `npm run release` 실행 — `scripts/release.mjs` 가 `vX.Y.Z` 태그를 만들고 `github` remote 로 푸시 → `.github/workflows/release.yml` 이 Windows runner 에서 자동 빌드 + Release 생성/업로드.
 4. 진행 상황: https://github.com/jungminna03/epl-s1/actions
