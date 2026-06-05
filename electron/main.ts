@@ -394,6 +394,17 @@ function registerIpc(
   );
 
   // 창 조작
+  //
+  // 주의: width/height 가 빠진 호출을 getBounds() 측정값으로 채우면 안 된다.
+  // DPI 배율 ≠ 100% 디스플레이에서 getBounds↔setBounds 의 DIP↔물리픽셀
+  // 반올림이 왕복 일치하지 않아 (electron#10862, resizable:false 창),
+  // 드래그 중 초당 ~60회 호출되며 창이 1px 씩 누적 팽창한다.
+  // → "의도된 크기" 를 따로 기억해 두고, 명시적으로 크기를 바꾸는 호출이
+  //   올 때만 갱신한다. 측정값은 절대 크기 입력으로 피드백하지 않는다.
+  const intendedSize: { width: number; height: number } = {
+    width: APP_CONFIG.widget.width,
+    height: APP_CONFIG.widget.height,
+  };
   ipcMain.on(
     "widget:set-bounds",
     (
@@ -402,12 +413,18 @@ function registerIpc(
     ) => {
       const win = getWindow();
       if (!win) return;
+      if (typeof b.width === "number") {
+        intendedSize.width = clamp(b.width, 100, 4000);
+      }
+      if (typeof b.height === "number") {
+        intendedSize.height = clamp(b.height, 100, 4000);
+      }
       const cur = win.getBounds();
       win.setBounds({
         x: typeof b.x === "number" ? b.x : cur.x,
         y: typeof b.y === "number" ? b.y : cur.y,
-        width: clamp(typeof b.width === "number" ? b.width : cur.width, 100, 4000),
-        height: clamp(typeof b.height === "number" ? b.height : cur.height, 100, 4000),
+        width: intendedSize.width,
+        height: intendedSize.height,
       });
     },
   );
@@ -463,13 +480,13 @@ function registerIpc(
     const target = screen.getAllDisplays().find((d) => d.id === displayId);
     const win = getWindow();
     if (!target || !win) return;
-    const wb = win.getBounds();
     const { x, y, width, height } = target.workArea;
+    // 측정값(getBounds) 대신 intendedSize 사용 — DPI 반올림 오차 피드백 방지.
     win.setBounds({
-      x: x + width - wb.width - 24,
-      y: y + height - wb.height - 24,
-      width: wb.width,
-      height: wb.height,
+      x: x + width - intendedSize.width - 24,
+      y: y + height - intendedSize.height - 24,
+      width: intendedSize.width,
+      height: intendedSize.height,
     });
   });
 
