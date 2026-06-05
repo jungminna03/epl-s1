@@ -24,7 +24,8 @@ import { createWidgetWindow, setWidgetInteractive } from "./widget-window";
 
 import path from "node:path";
 import os from "node:os";
-import { exec } from "node:child_process";
+import { exec, spawn } from "node:child_process";
+import { existsSync } from "node:fs";
 
 if (APP_CONFIG.isDev) {
   // 프로덕션 설치본(EPL 공지사항.exe)과 userData 가 같으면 캐시 파일 락이
@@ -274,6 +275,50 @@ function registerIpc(
     void shell.openExternal(url);
   });
 
+  // 외부 — 시크릿(InPrivate) 모드. 공용 PC 라 이전 사용자의 로그인 세션이
+  // 남으면 안 되는 사이트(LMS/포털 등) 용. Chrome --incognito 우선,
+  // 없으면 Edge -inprivate. 둘 다 실패하면 일반 openExternal 폴백.
+  // 반환값: 시크릿 모드로 열렸으면 true, 일반 모드 폴백이면 false.
+  // 렌더러가 이 값으로 "시크릿 아님" 경고를 띄운다 — 공용 PC 에서
+  // 시크릿인 줄 알고 로그인 → 세션 잔존 사고를 막기 위함.
+  ipcMain.handle(
+    "widget:open-external-incognito",
+    async (_e, url: string): Promise<boolean> => {
+      if (typeof url !== "string" || !/^https?:\/\//.test(url)) return false;
+      const fallback = () => void shell.openExternal(url);
+      const browser = findIncognitoBrowser();
+      if (!browser) {
+        log.warn("[ipc] Chrome/Edge 미발견 — 일반 브라우저 폴백");
+        fallback();
+        return false;
+      }
+      try {
+        const ok = await new Promise<boolean>((resolve) => {
+          const child = spawn(browser.exe, [browser.flag, url], {
+            detached: true,
+            stdio: "ignore",
+          });
+          // spawn 실패(ENOENT 등)는 동기 throw 가 아니라 error 이벤트로 옴.
+          // 리스너가 없으면 프로세스가 죽으므로 반드시 받아서 폴백.
+          child.once("spawn", () => {
+            child.unref();
+            resolve(true);
+          });
+          child.once("error", (err) => {
+            log.warn(`[ipc] 시크릿 브라우저 실행 실패 (${browser.exe}): ${err}`);
+            resolve(false);
+          });
+        });
+        if (!ok) fallback();
+        return ok;
+      } catch (err) {
+        log.warn(`[ipc] 시크릿 브라우저 spawn 예외: ${err}`);
+        fallback();
+        return false;
+      }
+    },
+  );
+
   // 창 조작
   ipcMain.on(
     "widget:set-bounds",
@@ -389,4 +434,38 @@ function registerIpc(
 
 function clamp(n: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, n));
+}
+
+/**
+ * 시크릿(InPrivate) 모드로 띄울 브라우저 실행 파일을 찾는다.
+ * Chrome 우선 (학생들에게 익숙), 없으면 Edge (Windows 에 항상 존재).
+ * 후보 경로를 앞에서부터 검사해 처음 발견되는 것을 쓴다.
+ */
+function findIncognitoBrowser(): { exe: string; flag: string } | null {
+  const programFiles = process.env["ProgramFiles"] ?? "C:\\Program Files";
+  const programFilesX86 =
+    process.env["ProgramFiles(x86)"] ?? "C:\\Program Files (x86)";
+  const localAppData = process.env.LOCALAPPDATA;
+
+  const chromeRel = "Google\\Chrome\\Application\\chrome.exe";
+  const edgeRel = "Microsoft\\Edge\\Application\\msedge.exe";
+
+  const candidates: { exe: string; flag: string }[] = [
+    { exe: path.join(programFiles, chromeRel), flag: "--incognito" },
+    { exe: path.join(programFilesX86, chromeRel), flag: "--incognito" },
+    ...(localAppData
+      ? [{ exe: path.join(localAppData, chromeRel), flag: "--incognito" }]
+      : []),
+    { exe: path.join(programFilesX86, edgeRel), flag: "-inprivate" },
+    { exe: path.join(programFiles, edgeRel), flag: "-inprivate" },
+  ];
+
+  for (const candidate of candidates) {
+    try {
+      if (existsSync(candidate.exe)) return candidate;
+    } catch {
+      // 접근 불가 경로는 건너뜀
+    }
+  }
+  return null;
 }

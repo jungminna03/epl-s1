@@ -50,9 +50,19 @@
   - `spawn(exe, [flag, url], { detached: true, stdio: "ignore" }).unref()`
     — 인자 배열 전달이라 셸 인젝션 없음. `error` 이벤트 리스너로 spawn 실패 캐치.
   - 미발견/실패 시 `shell.openExternal()` 일반 모드 폴백 + `log.warn`.
-- `electron/preload.ts`: `openExternalIncognito(url)` 노출 + `Window.epl` 타입 추가.
+- `electron/preload.ts`: `openExternalIncognito(url): Promise<boolean>` 노출 +
+  `Window.epl` 타입 추가. IPC 는 `invoke` — main 이 시크릿 성공 여부를 돌려준다.
 - 렌더러 폴백 체인: `epl.openExternalIncognito` → `epl.openExternal` → `window.open`
   (구버전 셸/웹 모드에서도 동작 유지, 시크릿만 미적용).
+
+### 2-1. 폴백 경고 (리뷰 반영)
+
+시크릿 폴백이 **조용히** 일어나면 학생이 시크릿인 줄 알고 LMS/포털에 로그인
+→ 공용 PC 에 세션이 남는 사고가 난다 (멀티 렌즈 리뷰 확정 발견 사항).
+그래서 폴백 경로 전부(브라우저 미발견, spawn 실패, 구버전 preload, 웹 모드)에서
+`openExternalIncognito` 가 `false` 를 반환하고, QuickBar 가 6초간 경고 토스트
+("⚠️ 시크릿 모드로 못 열어 일반 창으로 열렸어요 — 사용 후 꼭 로그아웃하세요")
+를 띄운다.
 
 ### 3. 포커스 정책 영향
 

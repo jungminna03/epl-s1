@@ -40,7 +40,7 @@ import CookiePanel from "@/components/cookie/CookiePanel";
  * 위젯이 사용자에게 의미있게 변할 때 같은 달 안에서 N 을 증가시키고,
  * 달이 바뀌면 N 을 1 로 리셋. 사람이 직접 갱신한다.
  */
-const WIDGET_VERSION = "V.2026.6.5";
+const WIDGET_VERSION = "V.2026.6.6";
 
 const CLOCK_INTERVAL_MS = 30_000;
 const PAGE_SIZE = 4;
@@ -52,6 +52,33 @@ const MARQUEE_GAP_VH = 4;
 const EXPIRING_SOON_MS = 24 * 60 * 60 * 1000;
 const ALWAYS_ON_TOP_PULSE_MS = 80;
 
+/**
+ * 하단 퀵바 바로가기. 공용 PC 라 전부 시크릿(InPrivate) 모드로 연다.
+ * 항목 추가는 여기에 한 줄 늘리면 됨 (4개 초과 시 레이아웃 재검토).
+ */
+const QUICK_LINKS = [
+  {
+    icon: "📚",
+    label: "LMS",
+    url: "https://learn.hoseo.ac.kr/login/index.php",
+  },
+  {
+    icon: "🏫",
+    label: "포털",
+    url: "https://sso.hoseo.edu/svc/tk/Auth.do?id=NEW_PORTAL&ac=Y&RelayState=%2Findex.jsp&ifa=N&",
+  },
+  {
+    icon: "🏛️",
+    label: "호서대",
+    url: "https://www.hoseo.ac.kr/Home/Main.mbz",
+  },
+  {
+    icon: "🎮",
+    label: "게임갤",
+    url: "https://hoseogamegal.netlify.app/",
+  },
+] as const;
+
 /* ─── Electron IPC 헬퍼 ─────────────────────────────── */
 
 type EplApi = {
@@ -59,6 +86,7 @@ type EplApi = {
   sendToBack?: () => void;
   show?: () => void;
   openExternal?: (url: string) => void;
+  openExternalIncognito?: (url: string) => Promise<boolean>;
   applyUpdateAndRestart?: () => void;
 };
 
@@ -76,6 +104,31 @@ function openExternal(url: string) {
   if (typeof window !== "undefined") {
     window.open(url, "_blank", "noopener,noreferrer");
   }
+}
+
+/**
+ * 외부 URL 을 시크릿(InPrivate) 창으로 연다. 공용 PC 에서 이전 사용자의
+ * 로그인 세션이 남지 않도록 main 이 Chrome --incognito (폴백: Edge
+ * -inprivate) 를 직접 띄움. 셸이 구버전이라 IPC 가 없으면 일반 모드 폴백.
+ *
+ * 반환값: 실제로 시크릿 모드로 열렸으면 true. false 면 일반(세션 유지)
+ * 창으로 폴백된 것 — 호출 측이 사용자에게 경고를 띄워야 한다.
+ */
+async function openExternalIncognito(url: string): Promise<boolean> {
+  const epl = getEpl();
+  if (epl?.openExternalIncognito) {
+    try {
+      // main 이 시크릿 spawn 성공 여부를 돌려준다 (폴백 시 false).
+      return (await epl.openExternalIncognito(url)) === true;
+    } catch {
+      // main 에 핸들러가 없는 비정상 조합 — 일반 모드로라도 열어준다.
+      openExternal(url);
+      return false;
+    }
+  }
+  // 구버전 preload / 웹 모드 — 시크릿 미지원.
+  openExternal(url);
+  return false;
 }
 
 function getEpl(): EplApi | undefined {
@@ -191,6 +244,7 @@ export default function WidgetPage() {
       <WidgetFrame>
         <WidgetHeader unreadCount={0} />
         <EmptySlots />
+        <QuickBar />
       </WidgetFrame>
     );
   }
@@ -200,6 +254,7 @@ export default function WidgetPage() {
       <WidgetFrame>
         <WidgetHeader unreadCount={0} />
         <ErrorBox message={error.message} />
+        <QuickBar />
       </WidgetFrame>
     );
   }
@@ -214,6 +269,7 @@ export default function WidgetPage() {
         onSelect={setSelectedNotice}
         paused={selectedNotice !== null}
       />
+      <QuickBar />
       <AnimatePresence>
         {selectedNotice && (
           <NoticeDetailOverlay
@@ -520,6 +576,92 @@ function NavArrow({
     >
       {isPrev ? "‹" : "›"}
     </button>
+  );
+}
+
+/* ─── Quick Bar ─────────────────────────────────────── */
+
+/** 시크릿 폴백 경고 토스트 표시 시간 */
+const QUICKBAR_WARN_MS = 6000;
+
+/**
+ * 하단 고정 바로가기 퀵바. 1행 4버튼 컴팩트 (아이콘 + 짧은 라벨).
+ * NoticeCard 와 같은 그라데이션 보더 톤. 클릭 시 시크릿 모드로 열림.
+ * 시크릿으로 못 열고 일반 창으로 폴백되면 경고 토스트를 띄운다
+ * (공용 PC 라 세션이 남는 걸 사용자가 모르고 로그인하는 사고 방지).
+ */
+function QuickBar() {
+  const [warn, setWarn] = useState(false);
+  const warnTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(
+    () => () => {
+      if (warnTimer.current) clearTimeout(warnTimer.current);
+    },
+    [],
+  );
+
+  const handleClick = useCallback(async (url: string) => {
+    const incognito = await openExternalIncognito(url);
+    if (incognito) return;
+    setWarn(true);
+    if (warnTimer.current) clearTimeout(warnTimer.current);
+    warnTimer.current = setTimeout(() => setWarn(false), QUICKBAR_WARN_MS);
+  }, []);
+
+  return (
+    <div
+      className="relative flex shrink-0"
+      style={{ gap: "1.2vh", paddingTop: "1.4vh" }}
+    >
+      <AnimatePresence>
+        {warn && (
+          <motion.div
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 6 }}
+            className="absolute inset-x-0 z-10 flex justify-center"
+            style={{ bottom: "100%", paddingBottom: "0.8vh" }}
+            role="status"
+          >
+            <span
+              className="whitespace-nowrap font-bold text-amber-300"
+              style={{
+                background: "#1a2233",
+                border: "1px solid rgba(251,191,36,0.45)",
+                borderRadius: "1.2vh",
+                padding: "0.8vh 1.6vh",
+                fontSize: "1.8vh",
+              }}
+            >
+              ⚠️ 시크릿 모드로 못 열어 일반 창으로 열렸어요 — 사용 후 꼭
+              로그아웃하세요
+            </span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      {QUICK_LINKS.map((link) => (
+        <button
+          key={link.url}
+          type="button"
+          onClick={() => void handleClick(link.url)}
+          className="flex flex-1 items-center justify-center whitespace-nowrap font-extrabold text-white transition-all hover:brightness-125 active:scale-[0.97]"
+          style={{
+            background:
+              "linear-gradient(#1a2233, #1a2233) padding-box, linear-gradient(135deg, rgba(34,211,238,0.5), rgba(96,165,250,0.35), rgba(167,139,250,0.5)) border-box",
+            border: "1px solid transparent",
+            borderRadius: "1.8vh",
+            padding: "1.4vh 0",
+            gap: "1vh",
+            fontSize: "2.4vh",
+          }}
+          title={`${link.label} — 시크릿 모드로 열기`}
+        >
+          <span aria-hidden>{link.icon}</span>
+          {link.label}
+        </button>
+      ))}
+    </div>
   );
 }
 

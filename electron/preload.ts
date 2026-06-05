@@ -19,6 +19,15 @@ contextBridge.exposeInMainWorld("epl", {
 
   // ─── 외부 ───────────────────────────────────────────────────
   openExternal: (url: string) => ipcRenderer.send("widget:open-external", url),
+  /**
+   * 시크릿(InPrivate) 모드로 외부 URL 을 연다. 공용 PC 에서 로그인 세션이
+   * 남으면 안 되는 사이트(LMS/포털 등) 용. Chrome → Edge 순으로 찾고,
+   * 둘 다 없으면 main 이 일반 openExternal 로 폴백.
+   * resolve 값: 시크릿으로 열렸으면 true, 일반 모드 폴백이면 false
+   * (렌더러가 false 일 때 "시크릿 아님" 경고를 표시).
+   */
+  openExternalIncognito: (url: string): Promise<boolean> =>
+    ipcRenderer.invoke("widget:open-external-incognito", url),
 
   // ─── 창 조작 ────────────────────────────────────────────────
   setBounds: (b: Partial<Bounds>) => ipcRenderer.send("widget:set-bounds", b),
@@ -111,6 +120,7 @@ declare global {
       navigate: (url: string) => void;
       // 외부
       openExternal: (url: string) => void;
+      openExternalIncognito: (url: string) => Promise<boolean>;
       // 창 조작
       setBounds: (b: Partial<Bounds>) => void;
       setAlwaysOnTop: (value: boolean) => void;
