@@ -1,6 +1,6 @@
 {
   "name": "epl-s1",
-  "version": "1.0.0",
+  "version": "1.0.15",
   "private": true,
   "main": "dist-electron/main.js",
   "description": "EPL 캠퍼스 공지사항 데스크톱 위젯",
