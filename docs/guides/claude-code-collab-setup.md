@@ -77,9 +77,11 @@ Claude Code 팀 협업 셋업을 깔아줘. 다음 원칙을 지킬 것:
 
 # 커밋 / 브랜치 컨벤션
 
-- **커밋 메시지**: Conventional Commits. `<type>(<scope>): <설명>`
+- **커밋 메시지**: `[TAG] 한국어 설명` 형식. 한 커밋엔 태그 하나만.
+  - 태그: `[ADD]`, `[FIX]`, `[UPDATE]`, `[REFACTOR]`, `[REMOVE]`, `[STYLE]`, `[DOCS]`, `[CHORE]`, `[TEST]`, `[BUILD]`, `[CI]`, `[PERF]`
+  - 예: `[ADD] 공지 자동 회전 기능`, `[FIX] 자동 업데이트 다운로드 오류`
+- **브랜치 이름**: `<type>/<짧은-설명>` (kebab-case, 영문)
   - 타입: `feat`, `fix`, `chore`, `docs`, `refactor`, `test`, `build`, `ci`, `style`, `perf`
-- **브랜치 이름**: `<type>/<짧은-설명>` (kebab-case)
 - **PR 머지 전**: 빌드/타입체크 통과.
 - **금지**: `master`/`main` 직접 푸시, force push, `--no-verify` 훅 우회.
 
