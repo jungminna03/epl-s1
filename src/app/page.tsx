@@ -27,13 +27,13 @@ export default function Home() {
         >
           관리자 로그인
         </Link>
-        <a
-          href="/download"
-          className="rounded-full border border-cyan-500/40 px-6 py-3 text-sm font-medium text-cyan-200 transition hover:border-cyan-400 hover:text-cyan-100"
-        >
-          위젯 다운로드 ↓
-        </a>
       </div>
+      <Link
+        href="/download"
+        className="-mt-3 text-sm text-cyan-300/80 underline underline-offset-4 transition hover:text-cyan-200"
+      >
+        🖥️ 데스크톱 위젯도 있어요 →
+      </Link>
     </main>
   );
 }
