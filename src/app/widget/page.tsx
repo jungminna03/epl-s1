@@ -18,11 +18,13 @@ import { db, type Notice } from "@/lib/instant";
 import {
   CATEGORY_STYLES,
   DEFAULT_STYLE,
+  formatPeriodLabel,
   getEffectivePeriod,
   isNoticeVisible,
   parseCategories,
 } from "@/lib/categories";
 import { fireCheckEffect } from "@/lib/check-effects";
+import { useDragScroll } from "@/lib/use-drag-scroll";
 import {
   loadReadState,
   maybeReset,
@@ -41,7 +43,7 @@ import DragGrip from "@/components/widget/DragGrip";
  * 위젯이 사용자에게 의미있게 변할 때 같은 달 안에서 N 을 증가시키고,
  * 달이 바뀌면 N 을 1 로 리셋. 사람이 직접 갱신한다.
  */
-const WIDGET_VERSION = "V.2026.6.8";
+const WIDGET_VERSION = "V.2026.6.9";
 
 const CLOCK_INTERVAL_MS = 30_000;
 const PAGE_SIZE = 4;
@@ -476,7 +478,13 @@ function NoticeGrid({
   const pageNotices = notices.slice(start, start + PAGE_SIZE);
 
   return (
-    <div className="flex flex-1 min-h-0 flex-col">
+    <div className="flex flex-1 min-h-0" style={{ gap: "1.2vh" }}>
+      <PageRail
+        total={totalPages}
+        current={pageIdx}
+        onPrev={goPrev}
+        onNext={goNext}
+      />
       <div className="relative flex-1 min-h-0 overflow-hidden">
         <AnimatePresence
           initial={false}
@@ -525,12 +533,6 @@ function NoticeGrid({
           </motion.div>
         </AnimatePresence>
       </div>
-      <PageNav
-        total={totalPages}
-        current={pageIdx}
-        onPrev={goPrev}
-        onNext={goNext}
-      />
     </div>
   );
 }
@@ -541,7 +543,14 @@ function isNoticeExpiringSoon(notice: Notice, now: number): boolean {
   return diff > 0 && diff <= EXPIRING_SOON_MS;
 }
 
-function PageNav({
+/** 레일 점 하나가 차지하는 세로 슬롯 높이 (vh) */
+const RAIL_SLOT_VH = 3;
+
+/**
+ * 왼쪽 세로 페이지 레일 — 고정된 점 트랙 위를 활성 썸(pill)이 위아래로
+ * 스프링 슬라이드한다. 위/아래 화살표로 수동 이동.
+ */
+function PageRail({
   total,
   current,
   onPrev,
@@ -555,31 +564,45 @@ function PageNav({
   const disabled = total <= 1;
   return (
     <div
-      className="flex shrink-0 items-center justify-center"
-      style={{ paddingTop: "1.6vh", gap: "2.8vh" }}
+      className="flex shrink-0 flex-col items-center justify-center"
+      style={{ width: "4vh", gap: "1.4vh" }}
     >
-      <NavArrow direction="prev" onClick={onPrev} disabled={disabled} />
-      <div className="flex items-center" style={{ gap: "1.2vh" }}>
+      <RailArrow direction="prev" onClick={onPrev} disabled={disabled} />
+      <div className="relative">
+        {/* 점 트랙 */}
         {Array.from({ length: Math.max(1, total) }).map((_, i) => (
           <div
             key={i}
-            className="rounded-full transition-all"
-            style={{
-              width: i === current ? "2.8vh" : "1.6vh",
-              height: "1.6vh",
-              background: i === current ? "#22d3ee" : "#334155",
-              boxShadow:
-                i === current ? "0 0 0.8vh rgba(34,211,238,0.5)" : undefined,
-            }}
-          />
+            className="flex items-center justify-center"
+            style={{ width: "1.2vh", height: `${RAIL_SLOT_VH}vh` }}
+          >
+            <div
+              className="rounded-full"
+              style={{ width: "1.2vh", height: "1.2vh", background: "#334155" }}
+            />
+          </div>
         ))}
+        {/* 활성 썸 — 현재 페이지 슬롯으로 슬라이드 */}
+        <motion.div
+          className="absolute left-0 rounded-full"
+          style={{
+            top: `${RAIL_SLOT_VH * 0.1}vh`,
+            width: "1.2vh",
+            height: `${RAIL_SLOT_VH * 0.8}vh`,
+            background: "#22d3ee",
+            boxShadow: "0 0 0.8vh rgba(34,211,238,0.5)",
+          }}
+          initial={false}
+          animate={{ y: `${current * RAIL_SLOT_VH}vh` }}
+          transition={{ type: "spring", stiffness: 300, damping: 28 }}
+        />
       </div>
-      <NavArrow direction="next" onClick={onNext} disabled={disabled} />
+      <RailArrow direction="next" onClick={onNext} disabled={disabled} />
     </div>
   );
 }
 
-function NavArrow({
+function RailArrow({
   direction,
   onClick,
   disabled,
@@ -597,14 +620,25 @@ function NavArrow({
       aria-label={isPrev ? "이전 페이지" : "다음 페이지"}
       className="flex items-center justify-center rounded-full leading-none text-slate-300 transition-all hover:bg-white/10 hover:text-white active:scale-90 disabled:cursor-not-allowed disabled:hover:bg-[rgba(255,255,255,0.06)] disabled:hover:text-slate-300"
       style={{
-        width: "4.8vh",
-        height: "4.8vh",
-        fontSize: "3.2vh",
+        width: "3.4vh",
+        height: "3.4vh",
         background: "rgba(255,255,255,0.06)",
         opacity: disabled ? 0.35 : 1,
       }}
     >
-      {isPrev ? "‹" : "›"}
+      <svg
+        width="55%"
+        height="55%"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden
+      >
+        {isPrev ? <path d="M6 15l6-6 6 6" /> : <path d="M6 9l6 6 6-6" />}
+      </svg>
     </button>
   );
 }
@@ -905,6 +939,8 @@ function NoticeDetailOverlay({
   const [localAdded, setLocalAdded] = useState(0);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
+  // focusable:false 창에선 휠이 안 먹는 환경이 있다 — 마우스 드래그로도 스크롤되게.
+  const dragScroll = useDragScroll();
 
   const dbCount = getCheckCount(notice);
   const count = dbCount + localAdded;
@@ -940,6 +976,7 @@ function NoticeDetailOverlay({
 
   const cats = parseCategories(notice.category);
   const style = cats.length > 0 ? CATEGORY_STYLES[cats[0]] : DEFAULT_STYLE;
+  const periodLabel = formatPeriodLabel(notice);
 
   return (
     <motion.div
@@ -1021,13 +1058,18 @@ function NoticeDetailOverlay({
               }}
             />
 
+            {/* 태그 행 — flex column 이 넘칠 때 세로로 찌그러져 잘리지 않게
+                shrink-0 + 최소 줄높이 보장 */}
             {cats.length > 0 && (
-              <div className="flex flex-wrap" style={{ gap: "0.5vh" }}>
+              <div
+                className="flex shrink-0 flex-wrap"
+                style={{ gap: "0.5vh", marginBottom: "0.6vh" }}
+              >
                 {cats.map((c) => (
                   <span
                     key={c}
-                    className={`inline-flex items-center rounded-full border font-bold ${CATEGORY_STYLES[c].badge}`}
-                    style={{ fontSize: "1.2vh", padding: "0.4vh 1.2vh" }}
+                    className={`inline-flex items-center whitespace-nowrap rounded-full border font-bold ${CATEGORY_STYLES[c].badge}`}
+                    style={{ fontSize: "1.6vh", padding: "0.4vh 1.2vh" }}
                   >
                     {CATEGORY_STYLES[c].label}
                   </span>
@@ -1036,7 +1078,7 @@ function NoticeDetailOverlay({
             )}
 
             <h2
-              className="font-extrabold text-white"
+              className="shrink-0 font-extrabold text-white"
               style={{
                 fontSize: "6vh",
                 lineHeight: 1.2,
@@ -1047,26 +1089,35 @@ function NoticeDetailOverlay({
               {notice.title}
             </h2>
             <p
-              className="text-slate-400"
+              className="shrink-0 text-slate-400"
               style={{ fontSize: "2.6vh", marginBottom: "1.6vh" }}
             >
               {dateLabel}
+              {periodLabel && (
+                <span className="text-slate-500" style={{ marginLeft: "1.2vh" }}>
+                  📅 {periodLabel}
+                </span>
+              )}
             </p>
 
             <div
-              className="flex-1 overflow-y-auto"
+              ref={dragScroll}
+              className="flex-1 select-none overflow-y-auto"
               style={{
                 marginBottom: "1.6vh",
                 scrollbarWidth: "thin",
                 scrollbarColor: "#777 #444",
               }}
             >
-              <SummaryBox notice={notice} />
-              <div
-                className="whitespace-pre-wrap text-white"
-                style={{ fontSize: "3.4vh", lineHeight: 1.55 }}
-              >
-                {notice.content || "(내용 없음)"}
+              {/* 단일 래퍼 — useDragScroll 고무줄 transform 대상 */}
+              <div>
+                <SummaryBox notice={notice} />
+                <div
+                  className="whitespace-pre-wrap text-white"
+                  style={{ fontSize: "3.4vh", lineHeight: 1.55 }}
+                >
+                  {notice.content || "(내용 없음)"}
+                </div>
               </div>
             </div>
 

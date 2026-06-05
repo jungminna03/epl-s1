@@ -116,6 +116,26 @@ export function formatAbsolute(ts: number): string {
 }
 
 /**
+ * 게시 기간 라벨 — 종료일(endDate)을 명시한 공지만 "YY.MM.DD ~ YY.MM.DD" 반환.
+ * 자동 종료(7일 룰) 공지는 null (기간을 보여줄 의미가 없음).
+ */
+export function formatPeriodLabel(notice: {
+  createdAt: number;
+  startDate?: number;
+  endDate?: number;
+}): string | null {
+  const { start, end, isAutoEnd } = getEffectivePeriod(notice);
+  if (isAutoEnd) return null;
+  const fmt = (ts: number) => {
+    const d = new Date(ts);
+    return `${String(d.getFullYear() % 100).padStart(2, "0")}.${String(
+      d.getMonth() + 1,
+    ).padStart(2, "0")}.${String(d.getDate()).padStart(2, "0")}`;
+  };
+  return `${fmt(start)} ~ ${fmt(end)}`;
+}
+
+/**
  * 쉼표로 구분된 카테고리 문자열을 파싱.
  * "1학년,3학년" → ["1학년", "3학년"]
  */

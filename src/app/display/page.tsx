@@ -6,12 +6,14 @@ import { db, type Notice } from "@/lib/instant";
 import {
   CATEGORY_STYLES,
   DEFAULT_STYLE,
+  formatPeriodLabel,
   formatRelative,
   isNoticeVisible,
   parseCategories,
   type CategoryStyle,
 } from "@/lib/categories";
 import { fireCheckEffect } from "@/lib/check-effects";
+import { useDragScroll } from "@/lib/use-drag-scroll";
 import FortunePanel from "@/components/fortune/FortunePanel";
 import CookiePanel from "@/components/cookie/CookiePanel";
 
@@ -203,11 +205,15 @@ function SignageLayout({ notices, now }: { notices: Notice[]; now: number }) {
         <PinToggle />
         <TopBar now={now} isMobile={isMobile} />
 
-        {/* Content area: grid + overlay */}
+        {/* Content area: 왼쪽 페이지 레일 + grid + overlay */}
         <div
-          className="relative flex-1 min-h-0 overflow-hidden"
-          style={{ padding: "1.5vh" }}
+          className="flex flex-1 min-h-0"
+          style={{ padding: "1.5vh", gap: "1.2vh" }}
         >
+          {totalPages > 1 && (
+            <PageIndicator total={totalPages} current={pageIdx} />
+          )}
+          <div className="relative flex-1 min-h-0 overflow-hidden">
           {/* 1×4 Grid */}
           <AnimatePresence initial={false} mode="popLayout" custom={slideDirection.current}>
             <motion.div
@@ -269,7 +275,6 @@ function SignageLayout({ notices, now }: { notices: Notice[]; now: number }) {
                   gridTemplateColumns: "1fr",
                   gridTemplateRows: "repeat(4, 1fr)",
                   gap: "1.5vh",
-                  padding: "1.5vh",
                   zIndex: 10,
                 }}
                 initial={{ opacity: 0 }}
@@ -301,15 +306,8 @@ function SignageLayout({ notices, now }: { notices: Notice[]; now: number }) {
               />
             )}
           </AnimatePresence>
+          </div>
         </div>
-
-        {/* Page indicator */}
-        {totalPages > 1 && (
-          <PageIndicator
-            total={totalPages}
-            current={pageIdx}
-          />
-        )}
       </div>
     </div>
   );
@@ -478,7 +476,6 @@ function GridTile({
         opacity: dimmed ? 0.3 : 1,
         transition: "opacity 0.2s",
       }}
-      whileHover={{ scale: 1.02 }}
       whileTap={{ scale: 0.98 }}
       transition={SPRING}
     >
@@ -573,10 +570,13 @@ function ExpandedTile({
 }) {
   const cats = parseCategories(notice.category);
   const style = cats.length > 0 ? CATEGORY_STYLES[cats[0]] : DEFAULT_STYLE;
+  const expandedPeriodLabel = formatPeriodLabel(notice);
   const [panelView, setPanelView] = useState<null | "fortune" | "cookie">(null);
 
   // --- Overscroll-to-close (touch + mouse) ---
   const scrollRef = useRef<HTMLDivElement>(null);
+  // 마우스 드래그로도 스크롤되게 (터치는 native 스크롤). 휠도 그대로 동작.
+  const dragScroll = useDragScroll();
   const overscrollStart = useRef<{ x: number; y: number; atTop: boolean; atBottom: boolean } | null>(null);
 
   const captureStart = useCallback((x: number, y: number) => {
@@ -594,19 +594,20 @@ function ExpandedTile({
 
     const dx = x - start.x;
     const dy = y - start.y;
-    const THRESHOLD = 60;
+    const H_THRESHOLD = 60; // 좌우 스와이프 닫기
+    const V_THRESHOLD = 110; // 끝에서 더 끌어 닫기 — 고무줄 피드백 구간을 넘겨야 발동
 
     // Horizontal overscroll (always counts — no horizontal scroll)
-    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > THRESHOLD) {
+    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > H_THRESHOLD) {
       onClose();
       return;
     }
     // Vertical overscroll at edges
-    if (start.atTop && dy > THRESHOLD) {
+    if (start.atTop && dy > V_THRESHOLD) {
       onClose();
       return;
     }
-    if (start.atBottom && dy < -THRESHOLD) {
+    if (start.atBottom && dy < -V_THRESHOLD) {
       onClose();
     }
   }, [onClose]);
@@ -666,24 +667,28 @@ function ExpandedTile({
         </svg>
       </button>
 
-      {/* Scrollable content with elastic overscroll */}
+      {/* Scrollable content — 진짜 스크롤. (이전 framer drag 방식은
+          dragSnapToOrigin 이 항상 원위치로 되돌려 긴 내용을 읽을 수 없었음.)
+          가장자리에서 더 당기면 닫히는 overscroll-to-close 는 유지. */}
       <div
-        ref={scrollRef}
-        className="relative z-10 flex-1 overflow-hidden text-center flex flex-col"
+        ref={(node) => {
+          scrollRef.current = node;
+          dragScroll(node);
+        }}
+        className="relative z-10 flex-1 select-none overflow-y-auto text-center flex flex-col"
+        style={{ scrollbarWidth: "thin", scrollbarColor: "#475569 transparent" }}
         onTouchStart={(e) => captureStart(e.touches[0].clientX, e.touches[0].clientY)}
         onTouchEnd={(e) => captureEnd(e.changedTouches[0].clientX, e.changedTouches[0].clientY)}
         onMouseDown={(e) => captureStart(e.clientX, e.clientY)}
         onMouseUp={(e) => captureEnd(e.clientX, e.clientY)}
       >
-      <motion.div
+      {/* shrink-0 필수: 없으면 flex item 으로서 컨테이너 높이에 맞게 찌그러져
+          scrollHeight == clientHeight 가 되고 (스크롤 불능), 내용물은
+          justify-center 로 위아래 양쪽으로 잘려나간다. */}
+      <div
         key={notice.id}
-        className="flex flex-col justify-center"
-        style={{ padding: "3vh", minHeight: "100%", y: 0 }}
-        drag="y"
-        dragElastic={0.12}
-        dragSnapToOrigin
-        dragConstraints={scrollRef}
-        dragTransition={{ bounceStiffness: 600, bounceDamping: 30 }}
+        className="flex shrink-0 flex-col justify-center"
+        style={{ padding: "3vh", minHeight: "100%" }}
       >
         {/* Category badges */}
         {cats.length > 0 && (
@@ -729,6 +734,11 @@ function ExpandedTile({
         {/* Time */}
         <p className="text-slate-600" style={{ fontSize: "1.2vh", marginTop: "2.5vh" }}>
           {formatRelative(notice.createdAt, now)}
+          {expandedPeriodLabel && (
+            <span style={{ marginLeft: "1vh" }}>
+              📅 {expandedPeriodLabel}
+            </span>
+          )}
         </p>
 
         {/* Link card */}
@@ -804,7 +814,7 @@ function ExpandedTile({
 
         {/* Check button — big & tappable */}
         <CheckButton notice={notice} onChecked={onClose} />
-      </motion.div>
+      </div>
       </div>
 
       {/* Fortune / Cookie overlay panels */}
@@ -922,26 +932,44 @@ function CheckButton({
 
 /* ─── Page Indicator ─── */
 
+/** 인디케이터 점 하나가 차지하는 세로 슬롯 높이 (vh) */
+const INDICATOR_SLOT_VH = 2.6;
+
 function PageIndicator({ total, current }: { total: number; current: number }) {
+  // 왼쪽 전용 세로 레일 — 고정된 점 트랙 위를 활성 썸(pill)이 위아래로
+  // 스프링 슬라이드한다. 페이지 세로 전환과 결을 맞춘 스크롤 스택 느낌.
   return (
     <div
-      className="flex shrink-0 items-center justify-center"
-      style={{ padding: "1vh 0 1.5vh", gap: "0.6vh" }}
+      className="flex shrink-0 flex-col items-center justify-center"
+      style={{ width: "3vh" }}
     >
-      {Array.from({ length: total }).map((_, i) => (
-        <div
-          key={i}
-          className={`rounded-full transition-all duration-300 ${
-            i === current
-              ? "bg-cyan-400 shadow-[0_0_6px_rgba(34,211,238,0.5)]"
-              : "bg-slate-700"
-          }`}
+      <div className="relative">
+        {/* 점 트랙 */}
+        {Array.from({ length: total }).map((_, i) => (
+          <div
+            key={i}
+            className="flex items-center justify-center"
+            style={{ width: "1vh", height: `${INDICATOR_SLOT_VH}vh` }}
+          >
+            <div
+              className="rounded-full bg-slate-700"
+              style={{ width: "1vh", height: "1vh" }}
+            />
+          </div>
+        ))}
+        {/* 활성 썸 — 현재 페이지 슬롯으로 슬라이드 */}
+        <motion.div
+          className="absolute left-0 rounded-full bg-cyan-400 shadow-[0_0_6px_rgba(34,211,238,0.5)]"
           style={{
-            height: "0.6vh",
-            width: i === current ? "2vh" : "0.6vh",
+            top: `${INDICATOR_SLOT_VH * 0.1}vh`,
+            width: "1vh",
+            height: `${INDICATOR_SLOT_VH * 0.8}vh`,
           }}
+          initial={false}
+          animate={{ y: `${current * INDICATOR_SLOT_VH}vh` }}
+          transition={{ type: "spring", stiffness: 300, damping: 28 }}
         />
-      ))}
+      </div>
     </div>
   );
 }
@@ -1087,6 +1115,9 @@ function MobileNoticeCard({
         <div className="mt-2 flex items-center justify-between">
           <span className="text-xs text-slate-500">
             {formatRelative(notice.createdAt, now)}
+            {formatPeriodLabel(notice) && (
+              <span className="ml-2">📅 {formatPeriodLabel(notice)}</span>
+            )}
           </span>
           {dbCount > 0 && (
             <span className="text-xs text-emerald-400">✓ {dbCount}</span>
@@ -1162,6 +1193,9 @@ function MobileDetailModal({
         {/* Time */}
         <p className="mt-2 text-sm text-slate-500">
           {formatRelative(notice.createdAt, now)}
+          {formatPeriodLabel(notice) && (
+            <span className="ml-2">📅 {formatPeriodLabel(notice)}</span>
+          )}
         </p>
 
         {/* AI Summary */}
