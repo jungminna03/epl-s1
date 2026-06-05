@@ -43,7 +43,7 @@ import DragGrip from "@/components/widget/DragGrip";
  * 위젯이 사용자에게 의미있게 변할 때 같은 달 안에서 N 을 증가시키고,
  * 달이 바뀌면 N 을 1 로 리셋. 사람이 직접 갱신한다.
  */
-const WIDGET_VERSION = "V.2026.6.10";
+const WIDGET_VERSION = "V.2026.6.11";
 
 const CLOCK_INTERVAL_MS = 30_000;
 const PAGE_SIZE = 4;
@@ -478,13 +478,7 @@ function NoticeGrid({
   const pageNotices = notices.slice(start, start + PAGE_SIZE);
 
   return (
-    <div className="flex flex-1 min-h-0" style={{ gap: "1.2vh" }}>
-      <PageRail
-        total={totalPages}
-        current={pageIdx}
-        onPrev={goPrev}
-        onNext={goNext}
-      />
+    <div className="flex flex-1 min-h-0 flex-col">
       <div className="relative flex-1 min-h-0 overflow-hidden">
         <AnimatePresence
           initial={false}
@@ -533,6 +527,12 @@ function NoticeGrid({
           </motion.div>
         </AnimatePresence>
       </div>
+      <PageNav
+        total={totalPages}
+        current={pageIdx}
+        onPrev={goPrev}
+        onNext={goNext}
+      />
     </div>
   );
 }
@@ -543,14 +543,7 @@ function isNoticeExpiringSoon(notice: Notice, now: number): boolean {
   return diff > 0 && diff <= EXPIRING_SOON_MS;
 }
 
-/** 레일 점 하나가 차지하는 세로 슬롯 높이 (vh) */
-const RAIL_SLOT_VH = 3;
-
-/**
- * 왼쪽 세로 페이지 레일 — 고정된 점 트랙 위를 활성 썸(pill)이 위아래로
- * 스프링 슬라이드한다. 위/아래 화살표로 수동 이동.
- */
-function PageRail({
+function PageNav({
   total,
   current,
   onPrev,
@@ -564,45 +557,31 @@ function PageRail({
   const disabled = total <= 1;
   return (
     <div
-      className="flex shrink-0 flex-col items-center justify-center"
-      style={{ width: "4vh", gap: "1.4vh" }}
+      className="flex shrink-0 items-center justify-center"
+      style={{ paddingTop: "1.6vh", gap: "2.8vh" }}
     >
-      <RailArrow direction="prev" onClick={onPrev} disabled={disabled} />
-      <div className="relative">
-        {/* 점 트랙 */}
+      <NavArrow direction="prev" onClick={onPrev} disabled={disabled} />
+      <div className="flex items-center" style={{ gap: "1.2vh" }}>
         {Array.from({ length: Math.max(1, total) }).map((_, i) => (
           <div
             key={i}
-            className="flex items-center justify-center"
-            style={{ width: "1.2vh", height: `${RAIL_SLOT_VH}vh` }}
-          >
-            <div
-              className="rounded-full"
-              style={{ width: "1.2vh", height: "1.2vh", background: "#334155" }}
-            />
-          </div>
+            className="rounded-full transition-all"
+            style={{
+              width: i === current ? "2.8vh" : "1.6vh",
+              height: "1.6vh",
+              background: i === current ? "#22d3ee" : "#334155",
+              boxShadow:
+                i === current ? "0 0 0.8vh rgba(34,211,238,0.5)" : undefined,
+            }}
+          />
         ))}
-        {/* 활성 썸 — 현재 페이지 슬롯으로 슬라이드 */}
-        <motion.div
-          className="absolute left-0 rounded-full"
-          style={{
-            top: `${RAIL_SLOT_VH * 0.1}vh`,
-            width: "1.2vh",
-            height: `${RAIL_SLOT_VH * 0.8}vh`,
-            background: "#22d3ee",
-            boxShadow: "0 0 0.8vh rgba(34,211,238,0.5)",
-          }}
-          initial={false}
-          animate={{ y: `${current * RAIL_SLOT_VH}vh` }}
-          transition={{ type: "spring", stiffness: 300, damping: 28 }}
-        />
       </div>
-      <RailArrow direction="next" onClick={onNext} disabled={disabled} />
+      <NavArrow direction="next" onClick={onNext} disabled={disabled} />
     </div>
   );
 }
 
-function RailArrow({
+function NavArrow({
   direction,
   onClick,
   disabled,
@@ -620,25 +599,14 @@ function RailArrow({
       aria-label={isPrev ? "이전 페이지" : "다음 페이지"}
       className="flex items-center justify-center rounded-full leading-none text-slate-300 transition-all hover:bg-white/10 hover:text-white active:scale-90 disabled:cursor-not-allowed disabled:hover:bg-[rgba(255,255,255,0.06)] disabled:hover:text-slate-300"
       style={{
-        width: "3.4vh",
-        height: "3.4vh",
+        width: "4.8vh",
+        height: "4.8vh",
+        fontSize: "3.2vh",
         background: "rgba(255,255,255,0.06)",
         opacity: disabled ? 0.35 : 1,
       }}
     >
-      <svg
-        width="55%"
-        height="55%"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        aria-hidden
-      >
-        {isPrev ? <path d="M6 15l6-6 6 6" /> : <path d="M6 9l6 6 6-6" />}
-      </svg>
+      {isPrev ? "‹" : "›"}
     </button>
   );
 }
