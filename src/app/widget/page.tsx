@@ -43,7 +43,7 @@ import DragGrip from "@/components/widget/DragGrip";
  * 위젯이 사용자에게 의미있게 변할 때 같은 달 안에서 N 을 증가시키고,
  * 달이 바뀌면 N 을 1 로 리셋. 사람이 직접 갱신한다.
  */
-const WIDGET_VERSION = "V.2026.6.9";
+const WIDGET_VERSION = "V.2026.6.10";
 
 const CLOCK_INTERVAL_MS = 30_000;
 const PAGE_SIZE = 4;
@@ -1088,16 +1088,12 @@ function NoticeDetailOverlay({
             >
               {notice.title}
             </h2>
+            {/* 기간 라벨이 있으면 작성일과 날짜가 중복이라 기간만 표시 */}
             <p
               className="shrink-0 text-slate-400"
               style={{ fontSize: "2.6vh", marginBottom: "1.6vh" }}
             >
-              {dateLabel}
-              {periodLabel && (
-                <span className="text-slate-500" style={{ marginLeft: "1.2vh" }}>
-                  📅 {periodLabel}
-                </span>
-              )}
+              {periodLabel ? <>📅 {periodLabel}</> : dateLabel}
             </p>
 
             <div

@@ -9,6 +9,7 @@ import {
   formatPeriodLabel,
   formatRelative,
   isNoticeVisible,
+  isRelativeFresh,
   parseCategories,
   type CategoryStyle,
 } from "@/lib/categories";
@@ -571,6 +572,9 @@ function ExpandedTile({
   const cats = parseCategories(notice.category);
   const style = cats.length > 0 ? CATEGORY_STYLES[cats[0]] : DEFAULT_STYLE;
   const expandedPeriodLabel = formatPeriodLabel(notice);
+  // 기간 라벨이 있으면 날짜 폴백(작성 후 7일 경과)은 중복이라 숨긴다
+  const showCreatedLabel =
+    !expandedPeriodLabel || isRelativeFresh(notice.createdAt, now);
   const [panelView, setPanelView] = useState<null | "fortune" | "cookie">(null);
 
   // --- Overscroll-to-close (touch + mouse) ---
@@ -733,9 +737,9 @@ function ExpandedTile({
 
         {/* Time */}
         <p className="text-slate-600" style={{ fontSize: "1.2vh", marginTop: "2.5vh" }}>
-          {formatRelative(notice.createdAt, now)}
+          {showCreatedLabel && formatRelative(notice.createdAt, now)}
           {expandedPeriodLabel && (
-            <span style={{ marginLeft: "1vh" }}>
+            <span style={{ marginLeft: showCreatedLabel ? "1vh" : 0 }}>
               📅 {expandedPeriodLabel}
             </span>
           )}
@@ -1079,6 +1083,8 @@ function MobileNoticeCard({
   const dbCount = getCheckCount(notice);
   const summary = (notice as Notice & { summary?: string | null }).summary;
   const snippet = summary && summary.trim().length > 0 ? summary : notice.content;
+  const periodLabel = formatPeriodLabel(notice);
+  const showCreated = !periodLabel || isRelativeFresh(notice.createdAt, now);
 
   return (
     <motion.button
@@ -1114,9 +1120,11 @@ function MobileNoticeCard({
         )}
         <div className="mt-2 flex items-center justify-between">
           <span className="text-xs text-slate-500">
-            {formatRelative(notice.createdAt, now)}
-            {formatPeriodLabel(notice) && (
-              <span className="ml-2">📅 {formatPeriodLabel(notice)}</span>
+            {showCreated && formatRelative(notice.createdAt, now)}
+            {periodLabel && (
+              <span className={showCreated ? "ml-2" : undefined}>
+                📅 {periodLabel}
+              </span>
             )}
           </span>
           {dbCount > 0 && (
@@ -1141,6 +1149,8 @@ function MobileDetailModal({
   const linkDomain = notice.link
     ? (() => { try { return new URL(notice.link).hostname; } catch { return notice.link; } })()
     : null;
+  const periodLabel = formatPeriodLabel(notice);
+  const showCreated = !periodLabel || isRelativeFresh(notice.createdAt, now);
   const [panelView, setPanelView] = useState<null | "fortune" | "cookie">(null);
 
   return (
@@ -1192,9 +1202,11 @@ function MobileDetailModal({
 
         {/* Time */}
         <p className="mt-2 text-sm text-slate-500">
-          {formatRelative(notice.createdAt, now)}
-          {formatPeriodLabel(notice) && (
-            <span className="ml-2">📅 {formatPeriodLabel(notice)}</span>
+          {showCreated && formatRelative(notice.createdAt, now)}
+          {periodLabel && (
+            <span className={showCreated ? "ml-2" : undefined}>
+              📅 {periodLabel}
+            </span>
           )}
         </p>
 

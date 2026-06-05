@@ -85,6 +85,9 @@ export const CATEGORY_STYLES: Record<Category, CategoryStyle> = {
   },
 };
 
+/** formatRelative 가 상대 표현("N일 전")을 유지하는 최대 일수. 이후엔 날짜로 폴백. */
+const RELATIVE_MAX_DAYS = 7;
+
 /**
  * 작성/수정 시각을 한국어 상대 표현으로 변환.
  */
@@ -96,11 +99,19 @@ export function formatRelative(ts: number, now: number = Date.now()): string {
   const hr = Math.floor(min / 60);
   if (hr < 24) return `${hr}시간 전`;
   const day = Math.floor(hr / 24);
-  if (day < 7) return `${day}일 전`;
+  if (day < RELATIVE_MAX_DAYS) return `${day}일 전`;
   const d = new Date(ts);
   return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, "0")}.${String(
     d.getDate(),
   ).padStart(2, "0")}`;
+}
+
+/**
+ * formatRelative(ts) 가 날짜 폴백이 아닌 상대 표현("N분 전" 등)으로 나오는지.
+ * 게시 기간 라벨과 날짜가 중복 표기되는 걸 막을 때 사용.
+ */
+export function isRelativeFresh(ts: number, now: number = Date.now()): boolean {
+  return now - ts < RELATIVE_MAX_DAYS * 24 * 60 * 60 * 1000;
 }
 
 /**
