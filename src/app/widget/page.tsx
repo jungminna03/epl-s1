@@ -975,32 +975,6 @@ function NoticeDetailOverlay({
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Close X */}
-        <button
-          onClick={onClose}
-          className="absolute z-30 flex items-center justify-center rounded-full"
-          style={{
-            top: "1.5vh",
-            right: "1.5vh",
-            width: "4vh",
-            height: "4vh",
-            background: "rgba(248,250,252,0.08)",
-            border: "1px solid rgba(248,250,252,0.15)",
-          }}
-        >
-          <svg
-            width="40%"
-            height="40%"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="white"
-            strokeWidth="2.5"
-          >
-            <line x1="6" y1="6" x2="18" y2="18" />
-            <line x1="18" y1="6" x2="6" y2="18" />
-          </svg>
-        </button>
-
         {fortuneView ? (
           <div
             className="absolute inset-0 z-40"

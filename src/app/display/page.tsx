@@ -642,35 +642,6 @@ function ExpandedTile({
         style={{ background: style.glowGradient }}
       />
 
-      {/* X close button */}
-      <button
-        onClick={onClose}
-        className="absolute z-30 flex items-center justify-center rounded-full"
-        style={{
-          top: "1.5vh",
-          right: "1.5vh",
-          width: "4vh",
-          height: "4vh",
-          background: "rgba(248,250,252,0.08)",
-          border: "1px solid rgba(248,250,252,0.15)",
-          backdropFilter: "blur(4px)",
-          WebkitBackdropFilter: "blur(4px)",
-        }}
-      >
-        <svg
-          width="40%"
-          height="40%"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="white"
-          strokeWidth="2.5"
-          strokeLinecap="round"
-        >
-          <line x1="6" y1="6" x2="18" y2="18" />
-          <line x1="18" y1="6" x2="6" y2="18" />
-        </svg>
-      </button>
-
       {/* Scrollable content — 진짜 스크롤. (이전 framer drag 방식은
           dragSnapToOrigin 이 항상 원위치로 되돌려 긴 내용을 읽을 수 없었음.)
           가장자리에서 더 당기면 닫히는 overscroll-to-close 는 유지. */}
@@ -1171,14 +1142,6 @@ function MobileDetailModal({
       >
         {/* Handle bar */}
         <div className="mx-auto mb-4 h-1 w-12 rounded-full bg-slate-600" />
-
-        {/* Close */}
-        <button
-          onClick={onClose}
-          className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-slate-300"
-        >
-          ✕
-        </button>
 
         {/* Category */}
         <div className="flex flex-wrap gap-1.5">
