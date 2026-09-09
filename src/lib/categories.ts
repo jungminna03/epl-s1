@@ -83,6 +83,20 @@ export const CATEGORY_STYLES: Record<Category, CategoryStyle> = {
     glowGradient:
       "radial-gradient(ellipse at 40% 50%, rgba(251,146,60,0.04) 0%, transparent 55%)",
   },
+  // 전 학년 대상. 학년 4색(cyan/violet/emerald/orange)과 겹치지 않는 중립 슬레이트 —
+  // 방송성 공지라 디스플레이에서 특정 학년처럼 튀지 않는 편이 낫다.
+  전체: {
+    label: "전체",
+    color: "#94a3b8",
+    dot: "bg-slate-400",
+    badge: "bg-slate-400/10 text-slate-300 border-slate-400/15",
+    ring: "",
+    progressColor: "rgba(148,163,184,0.4)",
+    activeBg: "#1f232b",
+    activeBorder: "rgba(148,163,184,0.15)",
+    glowGradient:
+      "radial-gradient(ellipse at 40% 50%, rgba(148,163,184,0.04) 0%, transparent 55%)",
+  },
 };
 
 /** formatRelative 가 상대 표현("N일 전")을 유지하는 최대 일수. 이후엔 날짜로 폴백. */

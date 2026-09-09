@@ -18,7 +18,7 @@ import {
   parseCategories,
 } from "@/lib/categories";
 import {
-  MIN_CONTENT_LENGTH,
+  hasSummarizableContent,
   SUMMARY_HARD_CAP,
   fallbackTitleFromContent,
   requestMeta,
@@ -31,6 +31,11 @@ import {
   type NoticeTab,
 } from "@/lib/notice-status";
 import { hasUnseenRelease } from "@/lib/release-notes";
+import {
+  hasDiscordMessages,
+  syncDiscord,
+  type DiscordMessageMap,
+} from "@/lib/discord";
 import ReleaseNotesDot from "@/components/release-notes/ReleaseNotesDot";
 import ReleaseNotesPanel from "@/components/release-notes/ReleaseNotesPanel";
 
@@ -146,13 +151,23 @@ interface FormState {
   content: string;
   category: string; // 쉼표 구분 다중 카테고리 (e.g. "1학년,3학년")
   link: string;
-  startDate: string; // "YYYY-MM-DD"
+  /** 게시 시작일 "YYYY-MM-DD". 예약 기능은 폐기됨(2026-09-03) — 새 공지는 항상 오늘, 수정 시엔 기존 값 유지. UI 입력 없음. */
+  startDate: string;
   endDate: string;   // "" means 무기한
   /** edit 모드 진입 시점의 content. 저장 시 비교해서 변경 없으면 AI 호출 생략. 새 공지는 빈 문자열. */
   originalContent: string;
   /** edit 모드 진입 시점의 summary. content 가 그대로면 그대로 transact 에 재사용. */
   originalSummary: string | null;
 }
+
+/** 등록/수정 진행 단계. 오버레이와 버튼 라벨이 같은 값을 본다. */
+type SubmitStage = "ai" | "save" | "discord";
+
+const STAGE_LABEL: Record<SubmitStage, string> = {
+  ai: "AI 제목·요약 생성 중…",
+  save: "저장 중…",
+  discord: "디스코드 전송 중…",
+};
 
 const EMPTY_FORM: FormState = {
   id: null,
@@ -166,6 +181,28 @@ const EMPTY_FORM: FormState = {
   originalSummary: null,
 };
 
+/**
+ * 공지를 디스코드와 upsert 동기화하고, 돌아온 채널→메시지 매핑을 공지에 저장한다.
+ * 연동이 꺼져 있거나(503) 실패하면 null 이 와서 매핑을 건드리지 않는다.
+ * 매핑 저장 자체가 실패해도 throw 하지 않는다 — 호출자의 저장 흐름을 막지 않기 위해.
+ */
+async function syncNoticeToDiscord(
+  notice: Parameters<typeof syncDiscord>[0]["notice"],
+  existing: DiscordMessageMap,
+): Promise<void> {
+  const result = await syncDiscord({ action: "upsert", notice, existing });
+  if (!result) return;
+  const changed = JSON.stringify(result.messages) !== JSON.stringify(existing);
+  if (!changed) return;
+  try {
+    await db.transact(
+      db.tx.notices[notice.id].update({ discordMessages: result.messages }),
+    );
+  } catch {
+    // 매핑 저장 실패 — 다음 수정 때 다시 시도된다.
+  }
+}
+
 function Dashboard({ onSignOut }: { onSignOut: () => void }) {
   const { isLoading, error, data } = db.useQuery({
     notices: { $: { order: { createdAt: "desc" } } },
@@ -173,6 +210,9 @@ function Dashboard({ onSignOut }: { onSignOut: () => void }) {
 
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [submitting, setSubmitting] = useState(false);
+  const [submitStage, setSubmitStage] = useState<SubmitStage | null>(null);
+  /** 이번 제출에서 AI 단계가 실제로 돌았는지 — 스텝 표시에서 AI 칸을 보여줄지 결정. */
+  const [submitUsesAi, setSubmitUsesAi] = useState(false);
   const [mobileView, setMobileView] = useState<"list" | "form">("list");
   const [releaseOpen, setReleaseOpen] = useState(false);
   const [releaseUnseen, setReleaseUnseen] = useState(false);
@@ -258,16 +298,25 @@ function Dashboard({ onSignOut }: { onSignOut: () => void }) {
     if (!trimmedContent) {
       return;
     }
-    setSubmitting(true);
-    try {
-      // 본문이 그대로면 기존 summary 재사용 — 토큰 낭비 방지.
-      const contentUnchanged =
-        editing && trimmedContent === form.originalContent.trim();
+    // 학년은 필수 — 디스코드가 학년별 채널로 라우팅되므로 비면 보낼 곳이 없다.
+    const selectedGrades = parseCategories(form.category);
+    if (selectedGrades.length === 0) {
+      return;
+    }
+    const categoryValue = selectedGrades.join(",");
+    // 본문이 그대로면 기존 summary 재사용 — 토큰 낭비 방지.
+    const contentUnchanged =
+      editing && trimmedContent === form.originalContent.trim();
+    const needsAi = !form.title.trim() || !contentUnchanged;
 
+    setSubmitting(true);
+    setSubmitUsesAi(needsAi);
+    setSubmitStage(needsAi ? "ai" : "save");
+    try {
       // 제목: 직접 입력했으면 그대로 사용. 빈칸이면 AI 가 자동 생성.
       let title = form.title.trim();
       let summary = contentUnchanged ? form.originalSummary : null;
-      if (!title || !contentUnchanged) {
+      if (needsAi) {
         const meta = await requestMeta(trimmedContent);
         if (!title) {
           title = meta.title ?? fallbackTitleFromContent(trimmedContent);
@@ -277,44 +326,103 @@ function Dashboard({ onSignOut }: { onSignOut: () => void }) {
         }
       }
 
+      const link = form.link.trim() || null;
+      const startDate = dateToMs(form.startDate);
+      const endDate = form.endDate ? dateToMs(form.endDate) : null;
+
+      setSubmitStage("save");
+
+      // 디스코드 동기화에 필요한 값. 신규는 id 를 먼저 뽑아 저장 후 매핑을 되써야 한다.
+      let noticeId: string;
+      let createdAt: number;
+      let existingDiscord: DiscordMessageMap = {};
+      let professor: string | null = null;
+
       if (editing && form.id) {
+        noticeId = form.id;
+        const prev = notices.find((n) => n.id === form.id);
+        createdAt = prev?.createdAt ?? Date.now();
+        existingDiscord = prev?.discordMessages ?? {};
+        professor = prev?.professor ?? null;
         await db.transact(
-          db.tx.notices[form.id].update({
+          db.tx.notices[noticeId].update({
             title,
             content: trimmedContent,
-            category: form.category || "",
-            link: form.link.trim() || null,
-            startDate: dateToMs(form.startDate),
-            endDate: form.endDate ? dateToMs(form.endDate) : null,
+            category: categoryValue,
+            link,
+            startDate,
+            endDate,
             summary,
           }),
         );
       } else {
+        noticeId = id();
+        createdAt = Date.now();
         await db.transact(
-          db.tx.notices[id()].update({
+          db.tx.notices[noticeId].update({
             title,
             content: trimmedContent,
-            category: form.category || "",
-            link: form.link.trim() || null,
-            createdAt: Date.now(),
-            startDate: dateToMs(form.startDate),
-            endDate: form.endDate ? dateToMs(form.endDate) : null,
+            category: categoryValue,
+            link,
+            createdAt,
+            startDate,
+            endDate,
             summary,
           }),
         );
       }
       reset();
       setMobileView("list");
+      setSubmitStage("discord");
+
+      // 저장이 끝난 최종값(AI 제목·요약 포함)으로 디스코드 동기화.
+      // 신규 → 채널에 게시, 수정 → 같은 메시지 갱신(학년 바뀌면 이전 채널 것은 삭제).
+      // 실패해도 공지 저장은 이미 끝났으므로 조용히 넘어간다.
+      await syncNoticeToDiscord(
+        {
+          id: noticeId,
+          title,
+          content: trimmedContent,
+          summary,
+          category: categoryValue,
+          link,
+          professor,
+          createdAt,
+          startDate,
+          endDate,
+        },
+        existingDiscord,
+      );
     } finally {
       setSubmitting(false);
+      setSubmitStage(null);
     }
   }
 
   async function handleDelete(n: Notice) {
-    const ok = window.confirm(`"${n.title}" 공지를 삭제할까요?`);
+    const ok = window.confirm(
+      hasDiscordMessages(n.discordMessages)
+        ? `"${n.title}" 공지를 삭제할까요?\n디스코드 채널에 올라간 글도 함께 삭제됩니다.`
+        : `"${n.title}" 공지를 삭제할까요?`,
+    );
     if (!ok) return;
+    const discord = n.discordMessages;
     await db.transact(db.tx.notices[n.id].delete());
     if (form.id === n.id) reset();
+    // 디스코드에 올라간 공지면 채널 메시지도 함께 지운다. 실패는 삼킨다(공지는 이미 삭제됨).
+    if (hasDiscordMessages(discord)) {
+      await syncDiscord({
+        action: "delete",
+        notice: {
+          id: n.id,
+          title: n.title,
+          content: n.content,
+          category: n.category,
+          createdAt: n.createdAt,
+        },
+        existing: discord,
+      });
+    }
   }
 
   function handleSignOut() {
@@ -322,16 +430,12 @@ function Dashboard({ onSignOut }: { onSignOut: () => void }) {
     onSignOut();
   }
 
-  // AI 호출이 실제로 일어나는 경우에만 로더 표시: 제목이 비었거나 본문이 바뀐 경우.
-  const showAISummaryLoader =
-    submitting &&
-    (!form.title.trim() ||
-      !(editing && form.content.trim() === form.originalContent.trim()));
-
   return (
     <main className="min-h-screen overflow-x-clip">
       <AnimatePresence>
-        {showAISummaryLoader && <AISummaryLoadingOverlay />}
+        {submitting && submitStage && (
+          <SubmitProgressOverlay stage={submitStage} withAi={submitUsesAi} />
+        )}
       </AnimatePresence>
       <ReleaseNotesDot
         hasUnseen={releaseUnseen}
@@ -423,6 +527,7 @@ function Dashboard({ onSignOut }: { onSignOut: () => void }) {
                 setForm={setForm}
                 editing={editing}
                 submitting={submitting}
+              submitStage={submitStage}
                 onSubmit={handleSubmit}
                 onReset={reset}
                 onBack={editing ? () => { reset(); setMobileView("list"); } : undefined}
@@ -453,6 +558,7 @@ function Dashboard({ onSignOut }: { onSignOut: () => void }) {
               setForm={setForm}
               editing={editing}
               submitting={submitting}
+              submitStage={submitStage}
               onSubmit={handleSubmit}
               onReset={reset}
               onBack={() => { reset(); setMobileView("list"); }}
@@ -468,7 +574,24 @@ function Dashboard({ onSignOut }: { onSignOut: () => void }) {
 /*  Subcomponents                                                              */
 /* -------------------------------------------------------------------------- */
 
-function AISummaryLoadingOverlay() {
+/**
+ * 등록/수정 진행 오버레이. AI 요약 → 저장 → 디스코드 전송 세 단계를 보여준다.
+ * 디스코드 전송 구간에도 떠 있어야 사용자가 탭을 닫지 않고 기다린다 (닫으면 전송 유실).
+ */
+function SubmitProgressOverlay({
+  stage,
+  withAi,
+}: {
+  stage: SubmitStage;
+  withAi: boolean;
+}) {
+  const steps: Array<{ key: SubmitStage; label: string }> = [
+    ...(withAi ? [{ key: "ai" as const, label: "AI 요약" }] : []),
+    { key: "save", label: "저장" },
+    { key: "discord", label: "디스코드 전송" },
+  ];
+  const currentIdx = steps.findIndex((st) => st.key === stage);
+
   // 무작위해 보이지만 SSR/CSR 가 동일하게 그려지도록 고정 좌표 사용
   const sparkles = [
     { top: "18%", left: "22%", delay: 0, size: 6 },
@@ -599,9 +722,47 @@ function AISummaryLoadingOverlay() {
           animate={{ opacity: [0.7, 1, 0.7] }}
           transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut" }}
         >
-          ✨ AI 요약 생성 중…
+          {stage === "ai" ? "✨ " : ""}
+          {STAGE_LABEL[stage]}
         </motion.p>
-        <p className="mt-2 text-xs text-zinc-500">잠시만 기다려주세요</p>
+        <ol className="mt-5 flex items-center gap-2 text-[11px]">
+          {steps.map((st, i) => {
+            const done = i < currentIdx;
+            const active = i === currentIdx;
+            return (
+              <li key={st.key} className="flex items-center gap-2">
+                <span
+                  className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 transition ${
+                    active
+                      ? "border-violet-400/60 text-violet-200"
+                      : done
+                        ? "border-emerald-400/40 text-emerald-300"
+                        : "border-white/10 text-zinc-500"
+                  }`}
+                >
+                  <span
+                    className={`inline-block size-1.5 rounded-full ${
+                      active
+                        ? "bg-violet-300 animate-pulse"
+                        : done
+                          ? "bg-emerald-400"
+                          : "bg-zinc-600"
+                    }`}
+                  />
+                  {done ? `${st.label} ✓` : st.label}
+                </span>
+                {i < steps.length - 1 && (
+                  <span className="h-px w-4 bg-white/10" aria-hidden />
+                )}
+              </li>
+            );
+          })}
+        </ol>
+        <p className="mt-3 text-xs text-zinc-500">
+          {stage === "discord"
+            ? "채널에 올리는 중입니다. 창을 닫지 말고 잠시만 기다려주세요"
+            : "잠시만 기다려주세요"}
+        </p>
       </motion.div>
     </motion.div>
   );
@@ -724,8 +885,10 @@ function CategoryPicker({
     onChange(next.join(","));
   }
 
+  // "전체" 는 나머지를 한꺼번에 켜는 단축키가 아니라 자기 채널을 가진 대등한 대상이다.
+  // 그래서 다른 학년과 똑같은 토글이며, 학년과 함께 고를 수 있다 (2026-09-09 결정).
   return (
-    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+    <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
       {CATEGORIES.map((c) => {
         const s = CATEGORY_STYLES[c];
         const active = selected.includes(c);
@@ -734,6 +897,7 @@ function CategoryPicker({
             key={c}
             type="button"
             onClick={() => toggle(c)}
+            aria-pressed={active}
             className={`rounded-xl border px-3 py-2 text-sm font-medium transition ${
               active
                 ? `${s.badge} border-current`
@@ -842,6 +1006,7 @@ function NoticeForm({
   setForm,
   editing,
   submitting,
+  submitStage,
   onSubmit,
   onReset,
   onBack,
@@ -850,17 +1015,24 @@ function NoticeForm({
   setForm: React.Dispatch<React.SetStateAction<FormState>>;
   editing: boolean;
   submitting: boolean;
+  submitStage: SubmitStage | null;
   onSubmit: (e: React.FormEvent) => void;
   onReset: () => void;
   onBack?: () => void;
 }) {
+  const hasGrade = parseCategories(form.category).length > 0;
   return (
     <form onSubmit={onSubmit} className="mt-5 space-y-4">
-      <Field label="카테고리">
+      <Field label="학년 (필수)">
         <CategoryPicker
           value={form.category}
           onChange={(c) => setForm((f) => ({ ...f, category: c }))}
         />
+        {!hasGrade && (
+          <p className="mt-1 text-[11px] text-amber-300/80">
+            학년을 1개 이상 선택해야 등록할 수 있습니다. 선택한 학년 채널마다 디스코드에 게시되고 해당 학년이 멘션됩니다.
+          </p>
+        )}
       </Field>
 
       <Field label="제목">
@@ -893,16 +1065,8 @@ function NoticeForm({
         />
       </Field>
 
-      <Field label="게시 기간">
+      <Field label="종료일 (선택)">
         <div className="flex items-center gap-2">
-          <input
-            type="date"
-            value={form.startDate}
-            onChange={(e) => setForm((f) => ({ ...f, startDate: e.target.value }))}
-            onClick={(e) => (e.target as HTMLInputElement).showPicker()}
-            className="flex-1 cursor-pointer rounded-xl border border-white/10 bg-zinc-950 px-3 py-2.5 text-sm text-zinc-100 outline-none transition hover:border-white/30 focus:border-zinc-500 [&::-webkit-calendar-picker-indicator]:hidden"
-          />
-          <span className="text-xs text-zinc-500">~</span>
           <input
             type="date"
             value={form.endDate}
@@ -913,7 +1077,8 @@ function NoticeForm({
         </div>
         {!form.endDate && (
           <p className="mt-1 text-[11px] text-amber-300/80">
-            종료일을 비우면 시작일로부터 {AUTO_PERIOD_DAYS}일 뒤
+            공지는 등록 즉시 게시됩니다. 종료일을 비우면 {editing ? "게시 시작일" : "오늘"}로부터{" "}
+            {AUTO_PERIOD_DAYS}일 뒤
             {form.startDate
               ? ` (${msToDate(dateToMs(form.startDate) + AUTO_PERIOD_DAYS * 24 * 60 * 60 * 1000)})`
               : ""}
@@ -925,15 +1090,11 @@ function NoticeForm({
       <div className="flex items-center gap-2 pt-2">
         <button
           type="submit"
-          disabled={submitting}
+          disabled={submitting || !hasGrade}
           className="flex-1 rounded-xl bg-zinc-100 px-4 py-2.5 text-sm font-medium text-zinc-900 transition hover:bg-white disabled:opacity-60"
         >
           {submitting
-            ? (form.title.trim() &&
-                editing &&
-                form.content.trim() === form.originalContent.trim())
-              ? "저장 중…"
-              : "✨ AI 제목·요약 생성 중…"
+            ? `${submitStage === "ai" ? "✨ " : ""}${STAGE_LABEL[submitStage ?? "save"]}`
             : editing
               ? "변경사항 저장"
               : "공지 등록"}
@@ -1025,6 +1186,7 @@ function MobileFormView({
   setForm,
   editing,
   submitting,
+  submitStage,
   onSubmit,
   onReset,
   onBack,
@@ -1033,6 +1195,7 @@ function MobileFormView({
   setForm: React.Dispatch<React.SetStateAction<FormState>>;
   editing: boolean;
   submitting: boolean;
+  submitStage: SubmitStage | null;
   onSubmit: (e: React.FormEvent) => void;
   onReset: () => void;
   onBack: () => void;
@@ -1068,6 +1231,7 @@ function MobileFormView({
             setForm={setForm}
             editing={editing}
             submitting={submitting}
+            submitStage={submitStage}
             onSubmit={onSubmit}
             onReset={onReset}
           />
@@ -1091,8 +1255,8 @@ function BackfillSummariesButton({ notices }: { notices: Notice[] }) {
         const trimmed = s?.trim() ?? "";
         const hasSummary = trimmed.length > 0;
         const tooLong = trimmed.length > SUMMARY_HARD_CAP;
-        // 본문이 MIN_CONTENT_LENGTH 미만이면 API 가 어차피 null 반환하므로 카운트에서 제외.
-        const tooShort = n.content.trim().length < MIN_CONTENT_LENGTH;
+        // 링크 제외 실질 텍스트가 짧으면 API 가 어차피 null 반환하므로 카운트에서 제외.
+        const tooShort = !hasSummarizableContent(n.content);
         return (!hasSummary || tooLong) && !tooShort;
       }),
     [notices],
@@ -1117,6 +1281,24 @@ function BackfillSummariesButton({ notices }: { notices: Notice[] }) {
         await db.transact(
           db.tx.notices[n.id].update({ title, summary: meta.summary }),
         );
+        // 이미 디스코드에 올라간 공지면 갱신된 제목·요약을 그쪽에도 반영.
+        if (hasDiscordMessages(n.discordMessages)) {
+          await syncNoticeToDiscord(
+            {
+              id: n.id,
+              title,
+              content: n.content,
+              summary: meta.summary,
+              category: n.category,
+              link: n.link ?? null,
+              professor: n.professor ?? null,
+              createdAt: n.createdAt,
+              startDate: n.startDate ?? null,
+              endDate: n.endDate ?? null,
+            },
+            n.discordMessages,
+          );
+        }
         setProgress((p) => ({ ...p, done: p.done + 1 }));
       } catch {
         setProgress((p) => ({ ...p, failed: p.failed + 1 }));

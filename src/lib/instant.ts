@@ -13,7 +13,10 @@ const APP_ID =
 /**
  * 카테고리 리터럴 — DB 는 string 으로 저장하지만 앱 레이어에서 타입으로 좁힌다.
  */
-export const CATEGORIES = ["1학년", "2학년", "3학년", "4학년"] as const;
+// "전체" 는 1~4학년의 합집합이 아니라 **대등한 5번째 대상**이다 (2026-09-09 결정).
+// 디스코드도 학년 채널 4개와 별개로 전체 채널이 따로 있고, 전체를 고르면 그 채널에만 간다.
+// 학년과 중복 선택 가능 — "1학년,전체" 는 1학년 채널 + 전체 채널 두 곳에 게시된다.
+export const CATEGORIES = ["1학년", "2학년", "3학년", "4학년", "전체"] as const;
 export type Category = (typeof CATEGORIES)[number];
 
 export { schema };
