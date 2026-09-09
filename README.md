@@ -23,7 +23,7 @@ InstantDB 를 모든 화면이 실시간 구독하므로 어드민에서 공지�
 - **Next.js 16 (App Router)** · **React 19** · **TypeScript** · **Tailwind CSS v4**
 - **[InstantDB](https://www.instantdb.com)** (`@instantdb/react`) — 백엔드 없이 프론트에서 실시간 CRUD / 실시간 구독
 - **[Framer Motion](https://www.framer.com/motion/)** — 카드 enter / exit / layout 애니메이션, 위젯 페이지 회전·마퀴 모션
-- **Ollama Cloud API** — AI 요약(`gpt-oss:120b`), 운세/포춘쿠키(`gemma3:4b`). `OLLAMA_API_KEY` 필요.
+- **Ollama Cloud API** — AI 요약(`OLLAMA_MODEL`, 기본 `gpt-oss:120b`), 운세/포춘쿠키(`OLLAMA_FORTUNE_MODEL`/`OLLAMA_COOKIE_MODEL`, 기본 `gemma4:31b`). `OLLAMA_API_KEY` 필요.
 
 ### 데스크톱 위젯 (`electron/`)
 - **Electron 42** — `bottom-right`, 단일 인스턴스. 배포 모드에선 `focusable:false` + `stayInBackground` 로 항상 다른 창 뒤에 깔림 (CLAUDE.md "포커스 정책" 참고)

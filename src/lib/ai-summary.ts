@@ -19,9 +19,16 @@ export const META_SYSTEM_PROMPT = `당신은 학내 공지 메타데이터 생�
 - "요약하면", "이 공지는" 같은 메타 표현 금지
 - 평서체
 
+[언어 규칙]
+- 제목/요약 모두 반드시 한국어로 작성. 영어 문장 금지.
+- 본문이 링크뿐이라 요약할 내용이 없으면 지어내지 말고 {"title":null,"summary":null} 반환.
+
 [출력]
 다른 텍스트 절대 없이, 이 형식의 JSON 한 줄만:
 {"title":"...","summary":"..."}`;
+
+/** 링크(URL) 매칭. 본문에서 링크를 걷어낸 "실질 텍스트" 를 재기 위한 패턴. */
+const URL_PATTERN = /(?:https?:\/\/|www\.)\S+/gi;
 
 /** 호출 자체를 건너뛰는 본문 길이 임계값 (이하면 호출 안 함). */
 export const MIN_CONTENT_LENGTH = 30;
@@ -33,6 +40,29 @@ export const OLLAMA_TIMEOUT_MS = 15_000;
 export const SUMMARY_HARD_CAP = 80;
 /** 제목 결과 최대 길이. 모델이 너무 길게 뽑은 경우 안전망. */
 export const TITLE_HARD_CAP = 30;
+
+/**
+ * 본문에서 링크를 걷어낸 실질 텍스트. 링크만 덜렁 있는 본문을 걸러내는 데 쓴다.
+ */
+export function contentWithoutUrls(content: string): string {
+  return content.replace(URL_PATTERN, " ").replace(/\s+/gu, " ").trim();
+}
+
+/**
+ * AI 를 부를 가치가 있는 본문인지 판정.
+ *
+ * URL 은 그 자체로 30자를 쉽게 넘기 때문에 단순 length 검사만 하면
+ * "링크 한 줄" 본문이 게이트를 통과해버리고, 모델은 요약할 한국어가 없으니
+ * 도메인/슬러그를 읽어 영어 문장을 지어낸다. 링크를 뺀 길이로 판정한다.
+ */
+export function hasSummarizableContent(content: string): boolean {
+  return contentWithoutUrls(content).length >= MIN_CONTENT_LENGTH;
+}
+
+/** 한글이 한 글자도 없으면 모델이 영어로 샌 것 — 버린다. */
+export function isKoreanOutput(s: string): boolean {
+  return /[가-힣]/u.test(s);
+}
 
 export interface AiMeta {
   /** AI 가 뽑은 제목. 실패 시 null → 호출자가 본문에서 fallback 생성. */
@@ -80,6 +110,7 @@ function tokenize(s: string): Set<string> {
 export function isTitleRelevant(title: string, content: string): boolean {
   const trimmed = title.trim();
   if (trimmed.length === 0) return false;
+  if (!isKoreanOutput(trimmed)) return false;
   for (const re of TITLE_DENY_PATTERNS) {
     if (re.test(trimmed)) return false;
   }
