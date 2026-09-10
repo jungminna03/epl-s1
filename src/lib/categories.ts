@@ -97,7 +97,29 @@ export const CATEGORY_STYLES: Record<Category, CategoryStyle> = {
     glowGradient:
       "radial-gradient(ellipse at 40% 50%, rgba(148,163,184,0.04) 0%, transparent 55%)",
   },
+  // 테스트 전용. 어드민 목록 배지에서만 쓰인다 (디스플레이엔 안 뜨므로).
+  // 실제 대상 5개와 한눈에 구분되도록 학년/전체가 안 쓰는 핑크.
+  테스트: {
+    label: "테스트",
+    color: "#f472b6",
+    dot: "bg-pink-400",
+    badge: "bg-pink-400/10 text-pink-300 border-pink-400/20",
+    ring: "",
+    progressColor: "rgba(244,114,182,0.4)",
+    activeBg: "#2a1f26",
+    activeBorder: "rgba(244,114,182,0.15)",
+    glowGradient:
+      "radial-gradient(ellipse at 40% 50%, rgba(244,114,182,0.04) 0%, transparent 55%)",
+  },
 };
+
+/** 디스코드 테스트 채널 전용 대상. 이게 걸린 공지는 학내 화면에 띄우지 않는다. */
+export const TEST_CATEGORY = "테스트";
+
+/** 테스트 대상이 하나라도 걸린 공지인지. 학년과 같이 골라도 테스트로 본다. */
+export function isTestNotice(notice: { category?: string }): boolean {
+  return parseCategories(notice.category ?? "").includes(TEST_CATEGORY);
+}
 
 /** formatRelative 가 상대 표현("N일 전")을 유지하는 최대 일수. 이후엔 날짜로 폴백. */
 const RELATIVE_MAX_DAYS = 7;
@@ -205,9 +227,12 @@ export function getEffectivePeriod(
  * 종료일이 비어 있으면 시작일 + AUTO_PERIOD_DAYS 까지만 노출.
  */
 export function isNoticeVisible(
-  notice: { createdAt: number; startDate?: number; endDate?: number },
+  notice: { createdAt: number; startDate?: number; endDate?: number; category?: string },
   now: number = Date.now(),
 ): boolean {
+  // 테스트 공지는 기간과 무관하게 화면에서 제외. 디스플레이/위젯이 공유하는 유일한 게이트라
+  // 여기서 막으면 두 화면 모두 자동으로 안전하다.
+  if (isTestNotice(notice)) return false;
   const { start, end } = getEffectivePeriod(notice);
   if (now < start) return false;
   return now <= end;

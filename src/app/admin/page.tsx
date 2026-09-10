@@ -15,7 +15,9 @@ import {
   DEFAULT_STYLE,
   formatAbsolute,
   getEffectivePeriod,
+  isTestNotice,
   parseCategories,
+  TEST_CATEGORY,
 } from "@/lib/categories";
 import {
   hasSummarizableContent,
@@ -191,15 +193,21 @@ async function syncNoticeToDiscord(
   existing: DiscordMessageMap,
 ): Promise<void> {
   const result = await syncDiscord({ action: "upsert", notice, existing });
-  if (!result) return;
+  if (!result) {
+    console.warn("[discord] 동기화 응답 없음 (연동 꺼짐이거나 요청 실패)");
+    return;
+  }
   const changed = JSON.stringify(result.messages) !== JSON.stringify(existing);
   if (!changed) return;
   try {
     await db.transact(
       db.tx.notices[notice.id].update({ discordMessages: result.messages }),
     );
-  } catch {
+  } catch (err) {
     // 매핑 저장 실패 — 다음 수정 때 다시 시도된다.
+    // 조용히 넘어가면 삭제 시 "디스코드에 안 올라간 공지" 로 취급돼 채널에 글이 남는다.
+    // 원인 추적이 가능하도록 콘솔에는 반드시 남긴다.
+    console.error("[discord] 메시지 매핑 저장 실패 — 삭제 시 채널 글이 남을 수 있음", err);
   }
 }
 
@@ -887,18 +895,24 @@ function CategoryPicker({
 
   // "전체" 는 나머지를 한꺼번에 켜는 단축키가 아니라 자기 채널을 가진 대등한 대상이다.
   // 그래서 다른 학년과 똑같은 토글이며, 학년과 함께 고를 수 있다 (2026-09-09 결정).
+  //
+  // 레이아웃: 윗줄 1~4학년(4칸), 아랫줄 전체·테스트(각 2칸). 한 줄에 6개를 욱여넣으면
+  // 어드민 사이드바 폭에서 "1학 / 년" 으로 줄바꿈돼 읽기 나빠진다.
   return (
-    <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
+    <div className="grid grid-cols-4 gap-2">
       {CATEGORIES.map((c) => {
         const s = CATEGORY_STYLES[c];
         const active = selected.includes(c);
+        const wide = c === "전체" || c === TEST_CATEGORY;
         return (
           <button
             key={c}
             type="button"
             onClick={() => toggle(c)}
             aria-pressed={active}
-            className={`rounded-xl border px-3 py-2 text-sm font-medium transition ${
+            className={`whitespace-nowrap rounded-xl border px-2 py-2 text-sm font-medium transition ${
+              wide ? "col-span-2" : ""
+            } ${
               active
                 ? `${s.badge} border-current`
                 : "border-white/10 bg-zinc-950 text-zinc-400 hover:border-white/30"
@@ -1031,6 +1045,11 @@ function NoticeForm({
         {!hasGrade && (
           <p className="mt-1 text-[11px] text-amber-300/80">
             학년을 1개 이상 선택해야 등록할 수 있습니다. 선택한 학년 채널마다 디스코드에 게시되고 해당 학년이 멘션됩니다.
+          </p>
+        )}
+        {isTestNotice({ category: form.category }) && (
+          <p className="mt-1 text-[11px] text-pink-300/80">
+            테스트 공지입니다. 디스코드 테스트 채널에만 올라가고 디스플레이·위젯에는 표시되지 않습니다.
           </p>
         )}
       </Field>

@@ -12,7 +12,7 @@
  * 발송 대상 라벨. `src/lib/instant.ts` 의 CATEGORIES 와 동일해야 한다.
  * "전체" 는 학년의 합집합이 아니라 자기 채널을 가진 대등한 대상이다.
  */
-export const DISCORD_GRADES = ["1학년", "2학년", "3학년", "4학년", "전체"] as const;
+export const DISCORD_GRADES = ["1학년", "2학년", "3학년", "4학년", "전체", "테스트"] as const;
 export type DiscordGrade = (typeof DISCORD_GRADES)[number];
 
 /** 대상별 embed 색상 — `categories.ts` 의 CATEGORY_STYLES.color 와 동일한 hex. */
@@ -22,6 +22,7 @@ const GRADE_COLOR: Record<DiscordGrade, number> = {
   "3학년": 0x34d399,
   "4학년": 0xfb923c,
   전체: 0x94a3b8,
+  테스트: 0xf472b6,
 };
 
 /** 채널 ID → 그 채널에 올라간 메시지 ID. 공지에 저장되어 수정/삭제 동기화에 쓴다. */
