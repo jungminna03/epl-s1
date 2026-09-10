@@ -22,6 +22,16 @@ export interface ReleaseEntry {
 
 export const RELEASE_ENTRIES: ReleaseEntry[] = [
   {
+    version: "V.2026.9.1",
+    date: "2026-09-10",
+    items: [
+      { tag: "ADD", text: "공지를 디스코드 채널에 자동 게시 — 등록·수정·삭제가 그대로 반영" },
+      { tag: "ADD", text: "발송 대상에 '테스트' 추가 — 테스트 채널에만 올라가고 디스플레이·위젯엔 안 뜸" },
+      { tag: "FIX", text: "포럼 형식 채널에 공지가 안 올라가던 문제 — 글마다 포스트로 발행" },
+      { tag: "UPDATE", text: "학년 선택을 2줄로 배치 (1~4학년 / 전체·테스트)" },
+    ],
+  },
+  {
     version: "V.2026.6.6",
     date: "2026-06-04",
     items: [
