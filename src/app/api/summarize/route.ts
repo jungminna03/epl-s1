@@ -2,15 +2,24 @@ import { NextResponse } from "next/server";
 import {
   MAX_CONTENT_LENGTH,
   META_SYSTEM_PROMPT,
-  MIN_CONTENT_LENGTH,
   OLLAMA_TIMEOUT_MS,
   SUMMARY_HARD_CAP,
   TITLE_HARD_CAP,
+  hasSummarizableContent,
+  isKoreanOutput,
   isTitleRelevant,
 } from "@/lib/ai-summary";
 
 /** 제목이 본문과 안 맞으면 최대 이만큼 재시도. (초기 호출 1 + 재시도 N) */
 const MAX_ATTEMPTS = 3;
+
+/**
+ * 추론(thinking) 강도. gpt-oss 계열은 reasoning 모델이라 기본값이면 영어로 장문의
+ * 추론을 먼저 돌린다 — 느릴 뿐 아니라 그 영어가 결과로 새기도 한다.
+ * 제목/요약 추출은 추론이 필요 없으므로 "low" 로 묶는다.
+ * (gpt-oss 는 think:false 를 무시하므로 레벨 문자열을 써야 한다.)
+ */
+const THINK_LEVEL = "low";
 
 /**
  * POST /api/summarize
@@ -22,7 +31,8 @@ const MAX_ATTEMPTS = 3;
  *   400 { error: "invalid_payload" } — content 누락
  *   503 { error: "ai_disabled" }     — OLLAMA_API_KEY 미설정
  *   502 { error: "upstream" }        — Ollama 5xx / 응답 파싱 실패
- *   504 { error: "timeout" }         — 타임아웃
+ *   504 { error: "timeout" }         — 첫 시도부터 타임아웃 (재시도 중 타임아웃은
+ *                                      직전까지 건진 요약을 200 으로 반환)
  */
 export async function POST(req: Request) {
   const apiKey = process.env.OLLAMA_API_KEY;
@@ -47,7 +57,8 @@ export async function POST(req: Request) {
 
   const rawContent = (body as { content: string }).content;
 
-  if (rawContent.trim().length < MIN_CONTENT_LENGTH) {
+  // 링크를 걷어낸 실질 텍스트 기준으로 판정 — "링크 한 줄" 본문은 호출 자체를 건너뛴다.
+  if (!hasSummarizableContent(rawContent)) {
     return NextResponse.json({ title: null, summary: null }, { status: 200 });
   }
 
@@ -57,8 +68,6 @@ export async function POST(req: Request) {
       : rawContent;
 
   const model = process.env.OLLAMA_MODEL || "gpt-oss:120b";
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), OLLAMA_TIMEOUT_MS);
 
   // 제목 후보를 최대 MAX_ATTEMPTS 번 받아보고, 본문과 매칭되는 첫 후보를 채택.
   // 매칭 실패가 누적되면 다음 시도에 "직전 후보는 본문과 무관했다" 는 교정 메시지를 추가.
@@ -81,20 +90,39 @@ export async function POST(req: Request) {
         });
       }
 
-      const upstream = await fetch("https://ollama.com/api/chat", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model,
-          messages,
-          stream: false,
-          format: "json",
-        }),
-        signal: controller.signal,
-      });
+      // 타임아웃은 시도마다 새로 잡는다. 루프 바깥에 하나만 두면 3번의 시도가
+      // 15초를 나눠 쓰게 되어, 제목 검증이 두 번 실패하면 3번째는 거의 확실히 죽는다.
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), OLLAMA_TIMEOUT_MS);
+      let upstream: Response;
+      try {
+        upstream = await fetch("https://ollama.com/api/chat", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model,
+            messages,
+            stream: false,
+            think: THINK_LEVEL,
+            format: "json",
+          }),
+          signal: controller.signal,
+        });
+      } catch (err) {
+        if (!(err instanceof Error && err.name === "AbortError")) throw err;
+        // 이번 시도만 타임아웃. 이미 쓸 만한 요약을 건졌으면 그걸 돌려주고,
+        // 첫 시도부터 죽었으면 504 로 알린다.
+        console.warn(
+          `[summarize] attempt ${attempt + 1} timed out after ${OLLAMA_TIMEOUT_MS}ms (model=${model})`,
+        );
+        if (lastSummary) break;
+        return NextResponse.json({ error: "timeout" }, { status: 504 });
+      } finally {
+        clearTimeout(timeoutId);
+      }
 
       if (!upstream.ok) {
         const errText = await upstream.text().catch(() => "<unreadable>");
@@ -118,10 +146,14 @@ export async function POST(req: Request) {
       }
 
       const { title, summary } = parseMeta(text);
-      lastSummary = summary;
+      // 한글이 없는 요약은 모델이 영어로 샌 것 — 본문에 없는 문장이므로 버린다.
+      lastSummary = summary && isKoreanOutput(summary) ? summary : null;
 
       if (title && isTitleRelevant(title, content)) {
-        return NextResponse.json({ title, summary }, { status: 200 });
+        return NextResponse.json(
+          { title, summary: lastSummary },
+          { status: 200 },
+        );
       }
 
       if (title) rejectedTitles.push(title);
@@ -141,13 +173,8 @@ export async function POST(req: Request) {
       { status: 200 },
     );
   } catch (err) {
-    if (err instanceof Error && err.name === "AbortError") {
-      return NextResponse.json({ error: "timeout" }, { status: 504 });
-    }
     console.error(`[summarize] fetch error (model=${model}):`, err);
     return NextResponse.json({ error: "upstream" }, { status: 502 });
-  } finally {
-    clearTimeout(timeoutId);
   }
 }
 

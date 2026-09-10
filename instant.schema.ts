@@ -17,6 +17,8 @@ const _schema = i.schema({
       endDate: i.number().optional(),
       checkCount: i.number().optional(),
       summary: i.string().optional(), // AI 요약. admin 저장 시 자동 생성, widget 자세히보기에서 노출.
+      // 디스코드 동기화 매핑 { [channelId]: messageId }. 수정/삭제 시 같은 메시지를 갱신·삭제하는 데 쓴다.
+      discordMessages: i.json<Record<string, string>>().optional(),
     }),
     admins: i.entity({
       name: i.string(),

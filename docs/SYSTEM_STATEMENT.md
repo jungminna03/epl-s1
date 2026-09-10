@@ -45,8 +45,8 @@
 | `/download` | 위젯 다운로드 랜딩 — 카피 + 다운로드 버튼 + `/widget` 라이브 iframe 미리보기, latest.yml 에서 버전 표시 |
 | `/download/latest` | GitHub Releases `latest.yml` 을 읽어 최신 `.exe` 로 302 리다이렉트 |
 | `/api/summarize` | 본문 → AI 제목+요약 (`gpt-oss:120b`, 제목-본문 매칭 검증 + 최대 3회 재시도) |
-| `/api/fortune` | 성별/생년월일/출생시간 → 오늘의 운세 (`gemma3:4b`) |
-| `/api/cookie` | 주제 → 포춘쿠키 메시지 (`gemma3:4b`) |
+| `/api/fortune` | 성별/생년월일/출생시간 → 오늘의 운세 (`OLLAMA_FORTUNE_MODEL`, 기본 `gemma4:31b`) |
+| `/api/cookie` | 주제 → 포춘쿠키 메시지 (`OLLAMA_COOKIE_MODEL`, 기본 `gemma4:31b`) |
 | `/fortune-test`, `/cookie-test` | 개발용 테스트 페이지 |
 
 AI API 공통: Ollama Cloud (`https://ollama.com`), 인증 `OLLAMA_API_KEY`, 타임아웃 15초.

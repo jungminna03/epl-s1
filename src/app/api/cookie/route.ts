@@ -2,7 +2,21 @@ import { NextResponse } from "next/server";
 import type { CookieResult } from "@/lib/cookie";
 
 const OLLAMA_API_KEY = process.env.OLLAMA_API_KEY;
-const COOKIE_MODEL = "gemma3:4b";
+const COOKIE_MODEL = process.env.OLLAMA_COOKIE_MODEL || "gemma4:31b";
+
+/**
+ * 추론(thinking) 강도. gemma4 는 think:false 를 존중하므로 추론을 끈다.
+ * 켜두면(예: "low") 추론 토큰이 num_predict 예산을 같이 깎아먹어,
+ * done_reason:"length" 로 끊기며 response 가 빈 문자열로 돌아온다
+ * ("응답이 비어 있습니다"). 운세/포춘쿠키 문구는 추론이 필요 없다.
+ * 주의: gpt-oss 계열로 되돌릴 땐 think:false 가 무시되므로 "low" 를 써야 한다.
+ */
+const THINK_LEVEL = false;
+/**
+ * 응답 토큰 예산. think:"low" 기준 실측 사용량이 66~87 토큰이라 400 이면 약 5배 여유.
+ * (num_predict 는 상한선일 뿐 실제 생성한 토큰만 과금되므로 올려둬도 비용은 같다.)
+ */
+const NUM_PREDICT = 400;
 
 function buildPrompt(concept: string, starCount: number): string {
   const today = new Date();
@@ -92,7 +106,8 @@ export async function POST(request: Request) {
         model: COOKIE_MODEL,
         prompt,
         stream: false,
-        options: { temperature: 0.85, num_predict: 400 },
+        think: THINK_LEVEL,
+        options: { temperature: 0.85, num_predict: NUM_PREDICT },
       }),
     });
 
@@ -102,9 +117,22 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: `Ollama 오류 (${res.status})` }, { status: 502 });
     }
 
-    const json = (await res.json()) as { response?: string };
+    const json = (await res.json()) as {
+      response?: string;
+      thinking?: string;
+      done_reason?: string;
+      eval_count?: number;
+    };
     const text = json.response ?? "";
-    if (!text) return NextResponse.json({ success: false, error: "응답이 비어 있습니다." }, { status: 502 });
+    if (!text) {
+      // 전형적 원인은 추론 토큰이 num_predict 를 다 먹고 끊긴 경우.
+      console.error(
+        `[/api/cookie] empty response (model=${COOKIE_MODEL}, ` +
+          `done_reason=${json.done_reason}, eval_count=${json.eval_count}, ` +
+          `thinking_len=${json.thinking?.length ?? 0})`,
+      );
+      return NextResponse.json({ success: false, error: "응답이 비어 있습니다." }, { status: 502 });
+    }
 
     const result = parseCookie(text, forcedStars);
     return NextResponse.json({ success: true, result });
