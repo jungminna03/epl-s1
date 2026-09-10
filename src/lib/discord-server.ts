@@ -20,6 +20,7 @@ const GRADE_ENV: Record<DiscordGrade, string> = {
   "3학년": "DISCORD_CHANNEL_Y3",
   "4학년": "DISCORD_CHANNEL_Y4",
   전체: "DISCORD_CHANNEL_ALL",
+  테스트: "DISCORD_CHANNEL_TEST",
 };
 
 /** 토큰이 없으면 연동 꺼짐. 라우트는 503 으로 응답한다. */
@@ -65,6 +66,9 @@ interface Target {
  * "전체" 도 GRADE_ENV 를 통해 다른 학년과 똑같이 처리된다 — 고른 대상의 채널에만 간다.
  * (예전엔 여기서 DISCORD_CHANNEL_ALL 을 무조건 덧붙여 모든 공지가 전체 채널에 미러됐다.
  *  2026-09-09 에 "전체는 대등한 5번째 대상" 으로 정리하며 제거.)
+ *
+ * "테스트" 도 같은 방식의 6번째 대상이다 — 고른 공지만 DISCORD_CHANNEL_TEST 로 간다.
+ * 전역 오버라이드가 아니므로 운영 env 에 이 채널이 있어도 실공지가 새지 않는다.
  */
 function resolveTargets(category: string): Target[] {
   const byChannel = new Map<string, Target>();
@@ -103,7 +107,7 @@ interface DiscordResult {
 /** Discord REST 호출. 429 는 retry_after 만큼 기다렸다가 1회 재시도. 실패는 throw 대신 status 로. */
 async function discordFetch(
   token: string,
-  method: "POST" | "PATCH" | "DELETE",
+  method: "GET" | "POST" | "PATCH" | "DELETE",
   path: string,
   body?: unknown,
   retried = false,
@@ -143,6 +147,94 @@ function messageIdOf(json: unknown): string | null {
   return typeof id === "string" && id.length > 0 ? id : null;
 }
 
+/**
+ * 포럼/미디어 채널 타입. 포럼은 채널에 메시지를 직접 못 올리고 글마다 스레드(포스트)를 만들어야 한다.
+ * (일반 텍스트=0, 공지=5 는 메시지 API 그대로.)
+ */
+const FORUM_TYPES = new Set([15, 16]);
+
+/** 채널 타입 캐시 — 채널 타입은 사실상 안 바뀌므로 프로세스 수명 동안 유지한다. */
+const channelTypeCache = new Map<string, number>();
+
+/** GET /channels/{id} 로 타입 조회. 실패하면 null (호출자는 텍스트 채널로 가정). */
+async function channelType(token: string, channelId: string): Promise<number | null> {
+  const cached = channelTypeCache.get(channelId);
+  if (cached !== undefined) return cached;
+  const r = await discordFetch(token, "GET", `/channels/${channelId}`);
+  const t = (r.json as { type?: unknown } | null)?.type;
+  if (!r.ok || typeof t !== "number") return null;
+  channelTypeCache.set(channelId, t);
+  return t;
+}
+
+async function isForum(token: string, channelId: string): Promise<boolean> {
+  const t = await channelType(token, channelId);
+  return t !== null && FORUM_TYPES.has(t);
+}
+
+/** 포럼 스레드 제목 최대 100자. */
+const THREAD_NAME_CAP = 100;
+/** 스레드 자동 보관까지 7일. 공지 성격상 최대치를 쓴다. */
+const AUTO_ARCHIVE_MINUTES = 10080;
+
+function threadName(title: string): string {
+  const t = (title || "공지").trim();
+  return t.length > THREAD_NAME_CAP ? `${t.slice(0, THREAD_NAME_CAP - 1)}…` : t;
+}
+
+/**
+ * 채널에 공지 1건 생성.
+ *
+ * 포럼이면 스레드(포스트)를 만든다. 반환되는 스레드 ID 는 **시작 메시지 ID 와 같은 값**이라
+ * 기존 `채널ID → 메시지ID` 매핑을 그대로 쓸 수 있다 (수정 시 그 ID 로 둘 다 접근).
+ */
+async function createNotice(
+  token: string,
+  channelId: string,
+  payload: Record<string, unknown>,
+  title: string,
+): Promise<DiscordResult> {
+  if (await isForum(token, channelId)) {
+    return discordFetch(token, "POST", `/channels/${channelId}/threads`, {
+      name: threadName(title),
+      auto_archive_duration: AUTO_ARCHIVE_MINUTES,
+      message: payload,
+    });
+  }
+  return discordFetch(token, "POST", `/channels/${channelId}/messages`, payload);
+}
+
+/**
+ * 기존 공지 수정. 포럼은 스레드 시작 메시지를 고치고(스레드ID == 메시지ID) 제목이 바뀌었으면
+ * 스레드 이름도 함께 갱신한다. 이름 변경 실패는 본문이 갱신됐으면 치명적이지 않으므로 무시.
+ */
+async function editNotice(
+  token: string,
+  channelId: string,
+  id: string,
+  payload: Record<string, unknown>,
+  title: string,
+): Promise<DiscordResult> {
+  if (await isForum(token, channelId)) {
+    const r = await discordFetch(token, "PATCH", `/channels/${id}/messages/${id}`, payload);
+    if (r.ok) await discordFetch(token, "PATCH", `/channels/${id}`, { name: threadName(title) });
+    return r;
+  }
+  return discordFetch(token, "PATCH", `/channels/${channelId}/messages/${id}`, payload);
+}
+
+/** 공지 삭제. 포럼은 스레드 자체를 지운다 (시작 메시지만 지우면 빈 포스트가 남는다). */
+async function removeNotice(
+  token: string,
+  channelId: string,
+  id: string,
+): Promise<DiscordResult> {
+  if (await isForum(token, channelId)) {
+    return discordFetch(token, "DELETE", `/channels/${id}`);
+  }
+  return discordFetch(token, "DELETE", `/channels/${channelId}/messages/${id}`);
+}
+
 /** 기존 메시지 전부 삭제. 404(이미 없음)는 성공으로 본다. */
 export async function deleteNoticeMessages(
   token: string,
@@ -151,7 +243,7 @@ export async function deleteNoticeMessages(
   const messages: DiscordMessageMap = { ...existing };
   let ok = true;
   for (const [channelId, messageId] of Object.entries(existing)) {
-    const r = await discordFetch(token, "DELETE", `/channels/${channelId}/messages/${messageId}`);
+    const r = await removeNotice(token, channelId, messageId);
     if (r.ok || r.status === 404) delete messages[channelId];
     else ok = false;
   }
@@ -159,7 +251,7 @@ export async function deleteNoticeMessages(
 }
 
 /**
- * 공지 1건 upsert: 대상 채널에 없으면 POST, 있으면 PATCH, 대상에서 빠진 채널은 DELETE.
+ * 공지 1건 upsert: 대상 채널에 없으면 생성, 있으면 수정, 대상에서 빠진 채널은 삭제.
  * 성공한 것만 매핑에 반영한다 — 실패한 채널은 기존 값을 유지해 다음 저장 때 재시도되게.
  */
 export async function upsertNoticeMessages(
@@ -177,28 +269,28 @@ export async function upsertNoticeMessages(
   // 1) 더 이상 대상이 아닌 채널(학년 변경 등)의 메시지는 삭제.
   for (const [channelId, messageId] of Object.entries(existing)) {
     if (targetIds.has(channelId)) continue;
-    const r = await discordFetch(token, "DELETE", `/channels/${channelId}/messages/${messageId}`);
+    const r = await removeNotice(token, channelId, messageId);
     if (r.ok || r.status === 404) delete messages[channelId];
     else ok = false;
   }
 
-  // 2) 대상 채널: 이미 있으면 PATCH, 없으면(또는 원본이 사라졌으면) POST.
+  // 2) 대상 채널: 이미 있으면 수정, 없으면(또는 원본이 사라졌으면) 새로 생성.
   for (const { channelId, mentions } of targets) {
-    // 수정(PATCH) 시에도 content 를 그대로 보내야 멘션 문구가 지워지지 않는다.
+    // 수정 시에도 content 를 그대로 보내야 멘션 문구가 지워지지 않는다.
     // Discord 는 편집으로는 알림을 다시 울리지 않으므로 중복 알림 걱정은 없다.
     const payload = buildMessage(embed, mentions);
     const existingId = existing[channelId];
     if (existingId) {
-      const r = await discordFetch(token, "PATCH", `/channels/${channelId}/messages/${existingId}`, payload);
+      const r = await editNotice(token, channelId, existingId, payload, notice.title);
       if (r.ok) continue;
       if (r.status !== 404) {
         ok = false;
         continue;
       }
-      // 메시지가 채널에서 수동 삭제된 경우 → 새로 올린다.
+      // 메시지/스레드가 채널에서 수동 삭제된 경우 → 새로 올린다.
       delete messages[channelId];
     }
-    const r = await discordFetch(token, "POST", `/channels/${channelId}/messages`, payload);
+    const r = await createNotice(token, channelId, payload, notice.title);
     const newId = r.ok ? messageIdOf(r.json) : null;
     if (newId) messages[channelId] = newId;
     else ok = false;

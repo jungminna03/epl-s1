@@ -28,6 +28,8 @@ import {
  *   DISCORD_CHANNEL_ALL      선택. 설정 시 모든 공지가 여기에도 올라간다.
  *   DISCORD_MENTION_Y1 ~ Y4 / DISCORD_MENTION_ALL
  *                            선택. 역할 ID | everyone | here. 해당 채널 게시 시 content 맨 앞에 멘션.
+ *   DISCORD_CHANNEL_TEST     대상 "테스트" 전용 채널. 테스트 공지는 디스플레이/위젯에 안 뜬다.
+ *   DISCORD_MENTION_TEST     선택. 테스트 채널 멘션. 비우면 멘션 없음.
  */
 
 function isPayload(v: unknown): v is DiscordNoticePayload {
@@ -78,6 +80,12 @@ export async function POST(req: Request) {
     action === "delete"
       ? await deleteNoticeMessages(token, existing)
       : await upsertNoticeMessages(token, notice, existing);
+
+  // 어느 채널에 무엇이 남았는지 서버 로그로 추적 가능하게. 클라이언트는 실패를 삼키므로
+  // 여기 로그가 "채널에 글이 남았는데 왜?" 를 확인할 수 있는 유일한 지점이다.
+  console.log(
+    `[discord] ${action} notice=${notice.id} ok=${result.ok} channels=${JSON.stringify(result.messages)} existing=${JSON.stringify(existing)}`,
+  );
 
   return NextResponse.json(result, { status: 200 });
 }
